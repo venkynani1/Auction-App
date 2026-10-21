@@ -132,7 +132,7 @@ export function SetupView({ roomLink }: { roomLink: PublishState }) {
       <Section title="Event and purse">
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Event name"><input id="set-name" className="field" value={s.eventName} onChange={(e) => dispatch({ type: 'SETTINGS', patch: { eventName: e.target.value } })} /></Field>
-          <Field label="Starting purse per team (₹ Cr)" hint="Most expensive player is ₹8 Cr. A big purse makes leftover cash worth a lot of points."><input id="set-purse" className="field num" type="number" min="1" step="1" value={s.startPurse} onChange={(e) => Number(e.target.value) > 0 && dispatch({ type: 'SETTINGS', patch: { startPurse: Number(e.target.value) } })} /></Field>
+          <Field label="Starting purse per team (₹ Cr)" hint="Most expensive player is ₹9 Cr. A big purse makes leftover cash worth a lot of points."><input id="set-purse" className="field num" type="number" min="1" step="1" value={s.startPurse} onChange={(e) => Number(e.target.value) > 0 && dispatch({ type: 'SETTINGS', patch: { startPurse: Number(e.target.value) } })} /></Field>
           <Field label="Points per full ₹1 Cr left"><input id="set-ppc" className="field num" type="number" min="0" step="0.5" value={s.ptsPerCr} onChange={(e) => dispatch({ type: 'SETTINGS', patch: { ptsPerCr: Number(e.target.value) } })} /></Field>
         </div>
       </Section>

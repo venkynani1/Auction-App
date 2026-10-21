@@ -52,60 +52,60 @@ Items marked * were added later as suggestions (not from the organiser's handwri
 
 | Lot | Name | Base price | Points |
 |---|---|---|---|
-| 1 | Thalapathy Vijay | ₹5 Cr | 30 |
-| 2 | Thala Ajith | ₹3 Cr | 25 |
-| 3 | Rajinikanth | ₹1.5 Cr | 18 |
-| 4 | Allu Arjun | ₹2 Cr | 18 |
-| 5 | Prabhas | ₹3 Cr | 25 |
-| 6 | Atharvaa | ₹25 L | 8 |
-| 7 | Kamal Haasan | ₹1 Cr | 15 |
-| 8 | Hrithik Roshan | ₹2 Cr | 20 |
-| 9 | Yash | ₹1 Cr | 15 |
-| 10 | Shah Rukh Khan | ₹1.5 Cr | 17 |
-| 11 | Nani | ₹50 L | 12 |
-| 12 | Suriya | ₹1 Cr | 14 |
-| 13 | Ram Charan | ₹50 L | 10 |
+| 1 | Thalapathy Vijay | ₹5.5 Cr | 35 |
+| 2 | Thala Ajith | ₹4 Cr | 30 |
+| 3 | Rajinikanth | ₹3 Cr | 25 |
+| 4 | Allu Arjun | ₹2 Cr | 25 |
+| 5 | Prabhas | ₹4 Cr | 40 |
+| 6 | Atharvaa | ₹25 L | 15 |
+| 7 | Kamal Haasan | ₹2 Cr | 20 |
+| 8 | Hrithik Roshan | ₹5 Cr | 37 |
+| 9 | Yash | ₹3 Cr | 29 |
+| 10 | Shah Rukh Khan | ₹4 Cr | 28 |
+| 11 | Nani | ₹2 Cr | 23 |
+| 12 | Suriya | ₹4 Cr | 30 |
+| 13 | Ram Charan | ₹2 Cr | 16 |
 | 14 | Nayanthara | ₹50 L | 10 |
-| 15 | Mrunal Thakur | ₹1 Cr | 12 |
-| 16 | Trisha | ₹1 Cr | 11 |
-| 17 | Janhvi Kapoor | ₹1.5 Cr | 13 |
-| 18 | Chris Evans | ₹6 Cr | 32 |
-| 19 | Tom Holland | ₹5 Cr | 30 |
-| 20 | Robert Downey Jr. (Dr. Doom) | ₹7 Cr | 40 |
-| 21 | Mohanlal | ₹50 L | 14 |
-| 22 | Vijay Sethupathi | ₹50 L | 15 |
-| 23 | NTR Jr. | ₹1 Cr | 19 |
-| 24 | Dhanush* | ₹1.5 Cr | 17 |
-| 25 | Dulquer Salmaan* | ₹1 Cr | 14 |
-| 26 | Fahadh Faasil* | ₹1 Cr | 15 |
+| 15 | Mrunal Thakur | ₹1 Cr | 17 |
+| 16 | Trisha | ₹1 Cr | 16 |
+| 17 | Janhvi Kapoor | ₹2 Cr | 19 |
+| 18 | Chris Evans | ₹6 Cr | 48 |
+| 19 | Tom Holland | ₹7 Cr | 53 |
+| 20 | Robert Downey Jr. (Dr. Doom) | ₹9 Cr | 62 |
+| 21 | Mohanlal | ₹2 Cr | 26 |
+| 22 | Vijay Sethupathi | ₹2.5 Cr | 27 |
+| 23 | NTR Jr. | ₹1 Cr | 29 |
+| 24 | Dhanush* | ₹1.5 Cr | 30 |
+| 25 | Dulquer Salmaan* | ₹4 Cr | 28 |
+| 26 | Fahadh Faasil* | ₹1.5 Cr | 25 |
 | 27 | Deepika Padukone* | ₹2 Cr | 20 |
-| 28 | Ranbir Kapoor* | ₹2 Cr | 19 |
-| 29 | Samantha Ruth Prabhu* | ₹1 Cr | 13 |
+| 28 | Ranbir Kapoor* | ₹5 Cr | 40 |
+| 29 | Samantha Ruth Prabhu* | ₹1 Cr | 15 |
 | 30 | Sai Pallavi* | ₹50 L | 12 |
-| 31 | Keanu Reeves* | ₹5 Cr | 28 |
+| 31 | Chris Hemsworth | ₹7.5 Cr | 55 |
 
 ### Round 2: Cricketers (30) (points secret until sold)
 
 | Lot | Name | Role | Base price | Points (hidden) |
 |---|---|---|---|---|
-| 1 | Jacob Duffy | Bowler | ₹2 Cr | 20 |
-| 2 | Bhuvneshwar Kumar | Bowler | ₹2 Cr | 25 |
-| 3 | Harshit Rana | Bowler | ₹1 Cr | 17 |
-| 4 | Varun Chakravarthy | Bowler | ₹1 Cr | 17 |
-| 5 | Jasprit Bumrah | Bowler | ₹3 Cr | 30 |
-| 6 | Sanju Samson | Wicketkeeper-Batter | ₹2 Cr | **TBD: not given** |
-| 7 | Rajat Patidar | Batter | ₹4 Cr | 25 |
-| 8 | Phil Salt | Wicketkeeper-Batter | ₹2 Cr | 20 |
-| 9 | Ajinkya Rahane | Batter | ₹50 L | 15 |
-| 10 | Rovman Powell | Batter | ₹50 L | 17 |
-| 11 | Shreyas Iyer | Batter | ₹3 Cr | 30 |
-| 12 | Priyansh Arya | Batter | ₹50 L | 20 |
-| 13 | MS Dhoni | Wicketkeeper-Batter | ₹8 Cr | 50 |
-| 14 | Rohit Sharma | Batter | ₹5 Cr | 35 |
-| 15 | Virat Kohli | Batter | ₹6 Cr | 45 |
-| 16 | Ruturaj Gaikwad | Batter | ₹2 Cr | 25 |
-| 17 | Venkatesh Iyer | All-rounder | ₹50 L | 15 |
-| 18 | Krunal Pandya | All-rounder | ₹1.5 Cr | 15 |
+| 1 | Mitchell Starc | Bowler | ₹5 Cr | 30 |
+| 2 | Bhuvneshwar Kumar | Bowler | ₹2 Cr | 22 |
+| 3 | Harshit Rana | Bowler | ₹1.75 Cr | 14 |
+| 4 | Varun Chakravarthy | Bowler | ₹1.5 Cr | 16 |
+| 5 | Jasprit Bumrah | Bowler | ₹6 Cr | 33 |
+| 6 | Sanju Samson | Wicketkeeper-Batter | ₹6 Cr | 42 |
+| 7 | Rajat Patidar | Batter | ₹4 Cr | 35 |
+| 8 | Phil Salt | Wicketkeeper-Batter | ₹2.5 Cr | 28 |
+| 9 | Ajinkya Rahane | Batter | ₹2 Cr | 24 |
+| 10 | Rovman Powell | Batter | ₹50 L | 16 |
+| 11 | Shreyas Iyer | Batter | ₹5 Cr | 39 |
+| 12 | Priyansh Arya | Batter | ₹50 L | 22 |
+| 13 | MS Dhoni | Wicketkeeper-Batter | ₹8.5 Cr | 77 |
+| 14 | Rohit Sharma | Batter | ₹6.5 Cr | 45 |
+| 15 | Virat Kohli | Batter | ₹7 Cr | 55 |
+| 16 | Ruturaj Gaikwad | Batter | ₹2 Cr | 31 |
+| 17 | Venkatesh Iyer | All-rounder | ₹2 Cr | 20 |
+| 18 | Krunal Pandya | All-rounder | ₹1.5 Cr | 17 |
 | 19 | Romario Shepherd | All-rounder | ₹1.5 Cr | 19 |
 | 20 | Hardik Pandya | All-rounder | ₹2 Cr | 28 |
 | 21 | Jamie Overton | All-rounder | ₹1 Cr | 20 |
