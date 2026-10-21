@@ -50,7 +50,7 @@ export function Podium({ state, step = 3, big }: { state: State; step?: number; 
               <div className="animate-zoom-in">
                 <div className={cx('mt-1 break-words font-[family-name:var(--font-display)] font-black uppercase leading-[.95]', big ? 'text-[clamp(22px,3.2vw,60px)]' : 'text-xl', idx === 0 && 'gold-text')}>{r!.team.name}</div>
                 <div className={cx('mt-2 font-[family-name:var(--font-display)] font-black num', big ? 'text-[clamp(30px,4.5vw,88px)]' : 'text-3xl')}>{r!.final}</div>
-                <div className={cx('label', big && '!text-[clamp(10px,1vw,16px)]')}>final points · {money(r!.remaining)} left</div>
+                <div className={cx('label', big && '!text-[clamp(10px,1vw,16px)]')}>{state.finalized ? 'final points' : 'points'} · {money(r!.remaining)} left</div>
               </div>
             ) : (
               <div className={cx('font-[family-name:var(--font-display)] font-black text-line-2', big ? 'text-[clamp(40px,6vw,110px)]' : 'text-4xl')}>?</div>

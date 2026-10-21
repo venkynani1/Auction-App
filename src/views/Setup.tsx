@@ -3,7 +3,10 @@ import { freshState, parseBackup, ROUNDS, standings, useStore } from '../store';
 import { copyText, saveFile } from '../lib/util';
 import { toCSV } from '../lib/csv';
 import { allPhotos, clearPhotos, setPhoto } from '../lib/photos';
-import { Btn, confirmDialog, Field, Label, toast } from '../components/ui';
+import { Btn, confirmDialog, cx, Field, Label, toast } from '../components/ui';
+import { JoinQR } from '../components/JoinQR';
+import { joinUrl, roomsConfigured } from '../lib/rooms';
+import type { PublishState } from '../lib/useRoomPublisher';
 
 function Section({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
   return (
@@ -15,7 +18,55 @@ function Section({ title, desc, children }: { title: string; desc?: string; chil
   );
 }
 
-export function SetupView() {
+const LINK_TEXT: Record<PublishState, [string, string]> = {
+  off: ['Not connected', 'text-dim'],
+  connecting: ['Connecting…', 'text-warn'],
+  live: ['● Live: phones are updating', 'text-ok'],
+  taken: ['This room code belongs to another computer. Make a new room code.', 'text-live'],
+  error: ['Could not reach Firebase. Check the internet and the Firebase settings.', 'text-live'],
+};
+
+function RoomsSection({ roomLink }: { roomLink: PublishState }) {
+  const { state, dispatch } = useStore();
+  const code = state.rooms.code;
+  const url = joinUrl(code);
+  if (!roomsConfigured) {
+    return (
+      <Section title="Team rooms" desc="Let every team follow its purse, points and players live on their phones.">
+        <div className="rounded-xl border border-warn/40 bg-warn/5 p-4 text-sm">
+          <b className="text-warn">Not set up yet.</b> Team rooms need a free Firebase database. Follow “Team rooms: one-time Firebase setup” in the README,
+          add the 5 <code className="text-gold-2">VITE_FIREBASE_…</code> values in Vercel → Project → Settings → Environment Variables, then redeploy.
+        </div>
+      </Section>
+    );
+  }
+  const [label, tone] = LINK_TEXT[roomLink];
+  return (
+    <Section title="Team rooms" desc={`One room per team (${state.teams.length} rooms). Participants scan one QR code and type their team number. Their phone then shows the round, the lot on sale, and their own purse, points and players.`}>
+      <div className="grid gap-5 sm:grid-cols-[200px_minmax(0,1fr)]">
+        <JoinQR code={code} className="w-full max-w-[200px]" />
+        <div className="flex min-w-0 flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div><Label>Room code</Label><div className="font-[family-name:var(--font-display)] text-4xl font-black tracking-wider text-gold-2">{code}</div></div>
+            <div className={cx('rounded-lg px-3 py-1.5 text-sm font-semibold', state.rooms.open ? 'bg-ok/15 text-ok' : 'bg-panel-2 text-muted')}>{state.rooms.open ? 'Rooms open' : 'Rooms closed'}</div>
+          </div>
+          <p className={cx('text-sm', tone)}>{state.rooms.open || roomLink !== 'off' ? label : 'Phones connect once you open the rooms.'}</p>
+          <div className="flex flex-wrap gap-2">
+            {state.rooms.open
+              ? <Btn variant="danger" onClick={() => dispatch({ type: 'ROOMS_OPEN', open: false })}>Close rooms</Btn>
+              : <Btn variant="gold" onClick={() => { dispatch({ type: 'ROOMS_OPEN', open: true }); toast('Rooms open. The projector now shows the QR code.', 'ok'); }}>🚪 Open {state.teams.length} rooms</Btn>}
+            <Btn variant="outline" onClick={async () => toast((await copyText(url)) ? 'Join link copied.' : url, 'ok')}>Copy join link</Btn>
+            <Btn variant="ghost" disabled={state.rooms.open} title={state.rooms.open ? 'Close the rooms first' : undefined}
+              onClick={async () => { if (await confirmDialog('Make a new room code?', 'Phones that already joined will need to scan the new QR code.', 'New code')) dispatch({ type: 'ROOMS_NEW_CODE' }); }}>New room code</Btn>
+          </div>
+          <p className="text-xs text-dim">Opening the rooms puts the QR code on the projector (Console → Projector shows → Room QR). Keep this laptop online during the auction.</p>
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+export function SetupView({ roomLink }: { roomLink: PublishState }) {
   const { state, dispatch, saved } = useStore();
   const s = state.settings;
   const [names, setNames] = useState('');
@@ -68,10 +119,11 @@ export function SetupView() {
         <ol className="grid gap-2 text-sm sm:grid-cols-2">
           {[
             'Set the purse and team names below.',
+            'Open the team rooms: the projector shows a QR code; each team scans it and types its team number.',
             'Add photos on the Players page (you can select the whole photos folder at once).',
             'Open this app in a second window, drag it to the projector screen, click “Projector” and then “Full screen”.',
             'Run the auction from “Console” in the first window. The projector follows every click.',
-            'Use “Projector shows → Leaderboard” between rounds, and “Final results” at the end.',
+            'After round 4, press “Calculate final points” (purse points are added only then), and reveal the winners with “Final results”.',
             'Export the results at the end, and save a backup now and then.',
           ].map((t, i) => <li key={i} className="flex gap-3 rounded-xl bg-panel-2/60 p-3"><b className="text-gold-2">{i + 1}</b><span>{t}</span></li>)}
         </ol>
@@ -103,6 +155,8 @@ export function SetupView() {
           </div>
         </div>
       </Section>
+
+      <RoomsSection roomLink={roomLink} />
 
       <Section title="Save, export, reset">
         <div className="flex flex-wrap gap-2">

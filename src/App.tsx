@@ -10,6 +10,8 @@ import { Projector } from './views/Projector';
 import { TeamsView } from './views/Teams';
 import { PlayersView } from './views/Players';
 import { SetupView } from './views/Setup';
+import { parseRoomHash, RoomApp } from './views/Room';
+import { useRoomPublisher } from './lib/useRoomPublisher';
 
 type Route = 'console' | 'projector' | 'show' | 'teams' | 'players' | 'setup';
 const ROUTES: Route[] = ['console', 'projector', 'show', 'teams', 'players', 'setup'];
@@ -23,6 +25,7 @@ function Shell() {
   useEffect(() => { const on = () => { setRoute(read()); window.scrollTo(0, 0); }; window.addEventListener('hashchange', on); return () => window.removeEventListener('hashchange', on); }, []);
   useEffect(() => { try { sessionStorage.setItem('bw-mute', muted ? '1' : '0'); } catch { /* ignore */ } }, [muted]);
   useEffect(() => { void initPhotos(); }, []);
+  const roomLink = useRoomPublisher(state, true);
   useEffect(() => {
     if (route !== 'show') return;
     const k = (e: KeyboardEvent) => { if (e.key === 'Escape') location.hash = 'projector'; };
@@ -59,7 +62,7 @@ function Shell() {
       {(route === 'projector' || route === 'show') && <Projector fullscreen={route === 'show'} />}
       {route === 'teams' && <TeamsView />}
       {route === 'players' && <PlayersView />}
-      {route === 'setup' && <SetupView />}
+      {route === 'setup' && <SetupView roomLink={roomLink} />}
       {route === 'show' && (
         <button className="fixed right-3 top-3 z-[75] rounded-lg bg-panel/70 px-3 py-1.5 text-xs text-muted opacity-0 transition hover:opacity-100 focus:opacity-100" onClick={() => { try { void document.exitFullscreen?.(); } catch { /* */ } location.hash = 'projector'; }}>Exit full screen (Esc)</button>
       )}
@@ -70,5 +73,9 @@ function Shell() {
 }
 
 export function App() {
+  // Phones that scanned the room QR get the participant view only, never the host's game.
+  const [room, setRoom] = useState(() => parseRoomHash(location.hash));
+  useEffect(() => { const on = () => setRoom(parseRoomHash(location.hash)); window.addEventListener('hashchange', on); return () => window.removeEventListener('hashchange', on); }, []);
+  if (room) return <RoomApp code={room.code} team={room.team} />;
   return <StoreProvider><Shell /></StoreProvider>;
 }

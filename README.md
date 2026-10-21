@@ -25,6 +25,7 @@ npm run build    # production files in dist/
 - Open the link on the auction laptop. Go to **Setup**: set the starting purse and paste your team names.
 - **Players & photos**: click **Add many photos** and select all your photo files at once. Each file is matched by name (e.g. `Thalapathy Vijay.jpg`).
 - Open the link in a **second window**, drag it to the projector, click **Projector → Full screen**.
+- **Open the team rooms** (Setup → Team rooms → Open rooms). The projector shows one QR code; each team scans it and types its team number to get its own live room.
 - Run everything from **Console** in the first window: **NEXT LOT → + bid buttons → tap the leading team → SOLD**. The projector follows every click.
 - **Projector shows**: switch between the current lot, the leaderboard (Top 3 + standings) and the final results reveal.
 - **Teams & scores**: the full Excel-style table, plus bonus/penalty points and cash for any team.
@@ -39,8 +40,33 @@ Data stays in that browser. Use **Save backup with photos** to move everything t
 - Round 2 Cricketers: points hidden until the player is sold, then revealed.
 - Round 3 Singers & Music Directors: every base price ₹50 L, points never shown on screen.
 - Round 4 Mystery: 4 sealed slips. After the sale, pick which slip came out; the app applies it
-  (51 points, ₹10 Cr, battery-% points, 2 points per ₹1 Cr spent, or a player swap).
-- Final points = player points + bonuses + 1 point for every full ₹1 Cr left in the purse.
+  (51 points, ₹10 Cr, battery % × 2 points, 2 points per ₹1 Cr spent, or a player swap).
+- Points start at zero and only count players and bonuses during the 4 rounds.
+- After round 4, press **Calculate final points**: every team gets 1 point for each full ₹1 Cr left in its purse,
+  the winners are ranked, and **Projector shows → Final results** reveals 3rd, 2nd and the champion.
+  (Undo is there if you pressed it too early.)
+
+## Team rooms (participants' phones)
+
+- One room per team: set 30 teams and there are 30 rooms. Everyone scans the **same QR code** and types their team number.
+- Each phone shows: "auction starts soon" before the first lot, then **Round 1–4** with the lot on sale and the current bid,
+  and its own team's **purse left, points, players bought and bonuses**. Round 3 player points stay secret until the final calculation.
+- After the final calculation the phone shows the final points; the team's position appears once the champion is revealed on the projector.
+- The auction laptop must be online. Rooms need the one-time Firebase setup below.
+
+### Team rooms: one-time Firebase setup (about 10 minutes, free)
+
+1. Go to [console.firebase.google.com](https://console.firebase.google.com) → **Add project** (Analytics not needed).
+2. **Build → Realtime Database → Create database** (pick a location, start in *locked mode*).
+   Open the **Rules** tab, paste the contents of `database.rules.json` from this repo, and **Publish**.
+3. **Build → Authentication → Get started → Sign-in method → Anonymous → Enable.**
+4. **Project settings (⚙) → Your apps → Web (`</>`)** → register an app (no hosting). Copy the config values.
+5. In **Vercel → your project → Settings → Environment Variables**, add these (see `.env.example`):
+   `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_DATABASE_URL`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`.
+6. **Deployments → Redeploy.** Setup → Team rooms now shows the QR code and the **Open rooms** button.
+
+For local testing, put the same values in a `.env.local` file next to `package.json`.
+The room code belongs to the laptop that first opened it. If you switch laptops, press **New room code** in Setup.
 
 ## Extras
 
@@ -54,5 +80,7 @@ src/data.ts         the 96 lots (edit here or in the app)
 src/store.tsx       game rules, scoring, autosave, window sync, undo
 src/views/          Console, Projector, Teams, Players, Setup
 src/components/     shared UI, podium, confetti, wordmark
+src/views/Room.tsx  the participant's phone screen (join + team room)
+src/lib/rooms.ts    what is sent to Firebase for the rooms
 src/lib/            photos (IndexedDB), sounds, money formatting, CSV
 ```

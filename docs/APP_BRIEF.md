@@ -26,7 +26,7 @@ Common rules: bidding opens at the base price, the highest bid wins, a team cann
 |---|---|---|---|
 | 1 | Instant 51 points | The team gets 51 points straight away. | +51 to the team's bonus points |
 | 2 | Player swap | Swap one of your players with a player from another team. | Move one purchased player between two teams (price and points move with the player) |
-| 3 | Battery bonus | Pick one person from another team. You get points equal to their phone battery %. | Organiser enters the battery % as bonus points |
+| 3 | Battery bonus | Pick one person from another team. You get double their phone battery % as points. | Organiser enters the battery %; the app adds 2 × that as bonus points |
 | 4 | ₹10 Cr cash | You get ₹10 Cr added to your purse. | +₹10 Cr added to the team's purse |
 | 5 | Double spend | You get 2 points for every ₹1 Cr you have spent. | Bonus points = 2 × the team's total spent so far |
 
@@ -38,7 +38,7 @@ The team still pays its winning bid for the slip. A slip earns no points of its 
 Remaining purse = Starting purse + cash bonuses − total spent
 Points          = sum of points of every lot bought (+ bonus points, − penalties)
 Purse points    = floor(Remaining purse in Cr) × 1          (₹2.5 Cr left → 2 points; never negative)
-Final points    = Points + Purse points
+Final points    = Points + Purse points   (purse points stay 0 until the organiser presses "Calculate final points")
 Rank            = by Final points, highest first (tie-break: more purse left, then team order)
 ```
 - Starting purse is a single setting, applied to all teams. **It has not been confirmed yet**: the first brief said ₹100 Cr. With prices topping out at ₹8 Cr, ₹100 Cr makes leftover cash worth up to ~100 points, more than any player (max 50). Suggest making it configurable and defaulting to about **₹20 Cr**, or confirm with the organiser.
