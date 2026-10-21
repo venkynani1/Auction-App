@@ -4,92 +4,92 @@ export const SEED_ITEMS = [
   "round": 1,
   "name": "Thalapathy Vijay",
   "role": "Actor",
-  "base": 5,
-  "points": 30
+  "base": 5.5,
+  "points": 35
  },
  {
   "round": 1,
   "name": "Thala Ajith",
   "role": "Actor",
-  "base": 3,
-  "points": 25
+  "base": 4,
+  "points": 30
  },
  {
   "round": 1,
   "name": "Rajinikanth",
   "role": "Actor",
-  "base": 1.5,
-  "points": 18
+  "base": 3,
+  "points": 25
  },
  {
   "round": 1,
   "name": "Allu Arjun",
   "role": "Actor",
   "base": 2,
-  "points": 18
+  "points": 25
  },
  {
   "round": 1,
   "name": "Prabhas",
   "role": "Actor",
-  "base": 3,
-  "points": 25
+  "base": 4,
+  "points": 40
  },
  {
   "round": 1,
   "name": "Atharvaa",
   "role": "Actor",
   "base": 0.25,
-  "points": 8
- },
- {
-  "round": 1,
-  "name": "Kamal Haasan",
-  "role": "Actor",
-  "base": 1,
   "points": 15
  },
  {
   "round": 1,
-  "name": "Hrithik Roshan",
+  "name": "Kamal Haasan",
   "role": "Actor",
   "base": 2,
   "points": 20
  },
  {
   "round": 1,
+  "name": "Hrithik Roshan",
+  "role": "Actor",
+  "base": 5,
+  "points": 37
+ },
+ {
+  "round": 1,
   "name": "Yash",
   "role": "Actor",
-  "base": 1,
-  "points": 15
+  "base": 3,
+  "points": 29
  },
  {
   "round": 1,
   "name": "Shah Rukh Khan",
   "role": "Actor",
-  "base": 1.5,
-  "points": 17
+  "base": 4,
+  "points": 28
  },
  {
   "round": 1,
   "name": "Nani",
   "role": "Actor",
-  "base": 0.5,
-  "points": 12
+  "base": 2,
+  "points": 23
  },
  {
   "round": 1,
   "name": "Suriya",
   "role": "Actor",
-  "base": 1,
-  "points": 14
+  "base": 4,
+  "points": 30
  },
  {
   "round": 1,
   "name": "Ram Charan",
   "role": "Actor",
-  "base": 0.5,
-  "points": 10
+  "base": 2,
+  "points": 16
  },
  {
   "round": 1,
@@ -103,84 +103,84 @@ export const SEED_ITEMS = [
   "name": "Mrunal Thakur",
   "role": "Actor",
   "base": 1,
-  "points": 12
+  "points": 17
  },
  {
   "round": 1,
   "name": "Trisha",
   "role": "Actor",
   "base": 1,
-  "points": 11
+  "points": 16
  },
  {
   "round": 1,
   "name": "Janhvi Kapoor",
   "role": "Actor",
-  "base": 1.5,
-  "points": 13
+  "base": 2,
+  "points": 19
  },
  {
   "round": 1,
   "name": "Chris Evans",
   "role": "Actor",
   "base": 6,
-  "points": 32
+  "points": 48
  },
  {
   "round": 1,
   "name": "Tom Holland",
   "role": "Actor",
-  "base": 5,
-  "points": 30
+  "base": 7,
+  "points": 53
  },
  {
   "round": 1,
   "name": "Robert Downey Jr.",
   "role": "as Dr. Doom",
-  "base": 7,
-  "points": 40
+  "base": 9,
+  "points": 62
  },
  {
   "round": 1,
   "name": "Mohanlal",
   "role": "Actor",
-  "base": 0.5,
-  "points": 14
+  "base": 2,
+  "points": 26
  },
  {
   "round": 1,
   "name": "Vijay Sethupathi",
   "role": "Actor",
-  "base": 0.5,
-  "points": 15
+  "base": 2.5,
+  "points": 27
  },
  {
   "round": 1,
   "name": "NTR Jr.",
   "role": "Actor",
   "base": 1,
-  "points": 19
+  "points": 29
  },
  {
   "round": 1,
   "name": "Dhanush",
   "role": "Actor",
   "base": 1.5,
-  "points": 17
+  "points": 30
  },
  {
   "round": 1,
   "name": "Dulquer Salmaan",
   "role": "Actor",
-  "base": 1,
-  "points": 14
+  "base": 4,
+  "points": 28
  },
  {
   "round": 1,
   "name": "Fahadh Faasil",
   "role": "Actor",
-  "base": 1,
-  "points": 15
+  "base": 1.5,
+  "points": 25
  },
  {
   "round": 1,
@@ -193,15 +193,15 @@ export const SEED_ITEMS = [
   "round": 1,
   "name": "Ranbir Kapoor",
   "role": "Actor",
-  "base": 2,
-  "points": 19
+  "base": 5,
+  "points": 40
  },
  {
   "round": 1,
   "name": "Samantha Ruth Prabhu",
   "role": "Actor",
   "base": 1,
-  "points": 13
+  "points": 15
  },
  {
   "round": 1,
@@ -212,136 +212,136 @@ export const SEED_ITEMS = [
  },
  {
   "round": 1,
-  "name": "Keanu Reeves",
+  "name": "Chris Hemsworth",
   "role": "Actor",
-  "base": 5,
-  "points": 28
+  "base": 7.5,
+  "points": 55
  },
  {
   "round": 2,
-  "name": "Jacob Duffy",
+  "name": "Mitchell Starc",
   "role": "Bowler",
-  "base": 2,
-  "points": 20
+  "base": 5,
+  "points": 30
  },
  {
   "round": 2,
   "name": "Bhuvneshwar Kumar",
   "role": "Bowler",
   "base": 2,
-  "points": 25
+  "points": 22
  },
  {
   "round": 2,
   "name": "Harshit Rana",
   "role": "Bowler",
-  "base": 1,
-  "points": 17
+  "base": 1.75,
+  "points": 14
  },
  {
   "round": 2,
   "name": "Varun Chakravarthy",
   "role": "Bowler",
-  "base": 1,
-  "points": 17
+  "base": 1.5,
+  "points": 16
  },
  {
   "round": 2,
   "name": "Jasprit Bumrah",
   "role": "Bowler",
-  "base": 3,
-  "points": 30
+  "base": 6,
+  "points": 33
  },
  {
   "round": 2,
   "name": "Sanju Samson",
   "role": "Wicketkeeper-Batter",
-  "base": 2,
-  "points": null
+  "base": 6,
+  "points": 42
  },
  {
   "round": 2,
   "name": "Rajat Patidar",
   "role": "Batter",
   "base": 4,
-  "points": 25
+  "points": 35
  },
  {
   "round": 2,
   "name": "Phil Salt",
   "role": "Wicketkeeper-Batter",
-  "base": 2,
-  "points": 20
+  "base": 2.5,
+  "points": 28
  },
  {
   "round": 2,
   "name": "Ajinkya Rahane",
   "role": "Batter",
-  "base": 0.5,
-  "points": 15
+  "base": 2,
+  "points": 24
  },
  {
   "round": 2,
   "name": "Rovman Powell",
   "role": "Batter",
   "base": 0.5,
-  "points": 17
+  "points": 16
  },
  {
   "round": 2,
   "name": "Shreyas Iyer",
   "role": "Batter",
-  "base": 3,
-  "points": 30
+  "base": 5,
+  "points": 39
  },
  {
   "round": 2,
   "name": "Priyansh Arya",
   "role": "Batter",
   "base": 0.5,
-  "points": 20
+  "points": 22
  },
  {
   "round": 2,
   "name": "MS Dhoni",
   "role": "Wicketkeeper-Batter",
-  "base": 8,
-  "points": 50
+  "base": 8.5,
+  "points": 77
  },
  {
   "round": 2,
   "name": "Rohit Sharma",
   "role": "Batter",
-  "base": 5,
-  "points": 35
+  "base": 6.5,
+  "points": 45
  },
  {
   "round": 2,
   "name": "Virat Kohli",
   "role": "Batter",
-  "base": 6,
-  "points": 45
+  "base": 7,
+  "points": 55
  },
  {
   "round": 2,
   "name": "Ruturaj Gaikwad",
   "role": "Batter",
   "base": 2,
-  "points": 25
+  "points": 31
  },
  {
   "round": 2,
   "name": "Venkatesh Iyer",
   "role": "All-rounder",
-  "base": 0.5,
-  "points": 15
+  "base": 2,
+  "points": 20
  },
  {
   "round": 2,
   "name": "Krunal Pandya",
   "role": "All-rounder",
   "base": 1.5,
-  "points": 15
+  "points": 17
  },
  {
   "round": 2,
