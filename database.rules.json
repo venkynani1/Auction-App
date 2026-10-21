@@ -1,0 +1,18 @@
+{
+  "rules": {
+    "events": {
+      "$code": {
+        ".read": true,
+        "owner": {
+          ".write": "auth != null && (!data.exists() || data.val() === auth.uid)"
+        },
+        "status": {
+          ".write": "auth != null && root.child('events').child($code).child('owner').val() === auth.uid"
+        },
+        "teams": {
+          ".write": "auth != null && root.child('events').child($code).child('owner').val() === auth.uid"
+        }
+      }
+    }
+  }
+}

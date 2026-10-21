@@ -57,7 +57,7 @@ export function Console({ muted }: { muted: boolean }) {
           <div className="panel p-4">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="font-[family-name:var(--font-display)] text-2xl font-black uppercase">Standings</h3>
-              <span className="label">final pts</span>
+              <span className="label">{state.finalized ? 'final pts' : 'points'}</span>
             </div>
             <Standings state={state} limit={10} compact />
             {state.teams.length > 10 && <a href="#teams" className="mt-2 block text-xs text-muted hover:text-gold-2">All {state.teams.length} teams →</a>}
@@ -171,7 +171,9 @@ function RoundDone({ state, nextRound }: { state: State; nextRound: RoundNo | nu
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           {nextRound
             ? <Btn variant="gold" size="xl" onClick={() => dispatch({ type: 'SET_ROUND', round: nextRound })}>Start round {nextRound}: {ROUNDS[nextRound].short} ▶</Btn>
-            : <Btn variant="gold" size="xl" onClick={() => dispatch({ type: 'FINALE_STEP', step: 0 })}>🏆 Go to final results</Btn>}
+            : state.finalized
+              ? <Btn variant="gold" size="xl" onClick={() => dispatch({ type: 'FINALE_STEP', step: 0 })}>🏆 Go to final results</Btn>
+              : <CalcFinalBtn size="xl" />}
           <Btn variant="subtle" size="xl" onClick={() => dispatch({ type: 'SET_SCREEN', screen: 'board' })}>Show leaderboard</Btn>
         </div>
       </div>
@@ -329,14 +331,32 @@ function SlipPicker({ state, item }: { state: State; item: Item }) {
   );
 }
 
+export function CalcFinalBtn({ size = 'md' }: { size?: 'md' | 'xl' }) {
+  const { state, dispatch } = useStore();
+  const go = async () => {
+    if (state.live?.phase === 'bidding') return toast('Finish the current lot first.', 'warn');
+    const left = state.items.filter((i) => i.status === 'available').length;
+    const body = `Every team gets ${state.settings.ptsPerCr} point for each full ₹1 Cr left in its purse, and the winners are ranked.${left ? ` ${left} lots have not been auctioned yet.` : ''}`;
+    if (!(await confirmDialog('Calculate final points?', body, 'Calculate', false))) return;
+    dispatch({ type: 'FINALIZE', on: true });
+    toast('Final points calculated. Reveal the winners from “Final results”.', 'ok');
+  };
+  return <Btn variant="gold" size={size} className="w-full" onClick={go}>🧮 Calculate final points</Btn>;
+}
+
 function ScreenControl({ state }: { state: State }) {
   const { dispatch } = useStore();
-  const opts: [typeof state.screen, string][] = [['lot', 'Current lot'], ['board', 'Leaderboard'], ['finale', 'Final results']];
+  const opts: [typeof state.screen, string][] = [['lot', 'Current lot'], ['board', 'Leaderboard'], ['finale', 'Final results'], ['join', 'Room QR']];
   return (
     <div className="panel p-4">
       <h3 className="font-[family-name:var(--font-display)] text-2xl font-black uppercase">Projector shows</h3>
-      <div className="mt-2 grid grid-cols-3 gap-1.5">
-        {opts.map(([k, l]) => <Btn key={k} size="sm" variant={state.screen === k ? 'gold' : 'subtle'} onClick={() => dispatch({ type: 'SET_SCREEN', screen: k })}>{l}</Btn>)}
+      <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+        {opts.map(([k, l]) => <Btn key={k} size="sm" variant={state.screen === k ? 'gold' : 'subtle'} disabled={k === 'finale' && !state.finalized} title={k === 'finale' && !state.finalized ? 'Calculate final points first' : undefined} onClick={() => dispatch({ type: 'SET_SCREEN', screen: k })}>{l}</Btn>)}
+      </div>
+      <div className="mt-3">
+        {state.finalized
+          ? <div className="flex items-center justify-between gap-2 rounded-xl bg-ok/10 px-3 py-2 text-sm"><span className="text-ok">✓ Final points calculated (purse points added)</span><Btn size="xs" variant="ghost" onClick={() => dispatch({ type: 'FINALIZE', on: false })}>Undo</Btn></div>
+          : <CalcFinalBtn />}
       </div>
       {state.screen === 'finale' && (
         <div className="mt-3 flex flex-wrap gap-1.5">

@@ -5,6 +5,8 @@ import { Wordmark } from '../components/Brand';
 import { Photo, Podium } from '../components/bits';
 import { BlockBar, cx, TeamDot } from '../components/ui';
 import { confetti } from '../components/Confetti';
+import { JoinQR } from '../components/JoinQR';
+import { joinUrl } from '../lib/rooms';
 
 const FLASH_MS = { sold: 4200, unsold: 2400, slip: 5500, round: 3200 } as const;
 
@@ -151,7 +153,26 @@ function BoardStage({ state }: { state: State }) {
             </div>
           ))}
         </div>
-        <p className="mt-3 text-[clamp(12px,1vw,18px)] text-muted">Final points = player points + bonuses + 1 point for every full ₹1 Cr left.</p>
+        <p className="mt-3 text-[clamp(12px,1vw,18px)] text-muted">{state.finalized ? 'Final points = player points + bonuses + 1 point for every full ₹1 Cr left.' : 'Points = player points + bonuses. Leftover purse points are added at the final calculation.'}</p>
+      </div>
+    </div>
+  );
+}
+
+function JoinStage({ state }: { state: State }) {
+  const url = joinUrl(state.rooms.code).replace(/^https?:\/\//, '');
+  return (
+    <div className="grid h-full grid-cols-1 items-center gap-[clamp(16px,3vw,60px)] md:grid-cols-[auto_minmax(0,1fr)]">
+      <JoinQR code={state.rooms.code} className="mx-auto w-[min(70vw,58vh)] shadow-[0_0_80px_-20px_var(--color-gold)]" />
+      <div className="min-w-0 text-center md:text-left">
+        <div className="label !text-[clamp(14px,1.4vw,24px)] text-gold-2">{state.rooms.open ? 'TEAM ROOMS ARE OPEN' : 'TEAM ROOMS OPEN SOON'}</div>
+        <h1 className="font-[family-name:var(--font-display)] font-black uppercase leading-[.88] text-[clamp(48px,7vw,140px)]">Scan to join<br />your team</h1>
+        <ol className="mt-4 flex flex-col gap-1 text-[clamp(18px,1.9vw,34px)] text-fg/85">
+          <li>1 · Scan the QR code with your phone camera</li>
+          <li>2 · Type your team number (1 – {state.teams.length})</li>
+          <li>3 · Watch your purse, points and players live</li>
+        </ol>
+        <div className="mt-4 break-all font-[family-name:var(--font-cond)] text-[clamp(14px,1.3vw,24px)] tracking-wide text-muted">{url}</div>
       </div>
     </div>
   );
@@ -231,9 +252,10 @@ export function Projector({ fullscreen }: { fullscreen: boolean }) {
   return (
     <div className={cx('stage-bg relative flex flex-col overflow-hidden', fullscreen ? 'h-screen' : 'min-h-[calc(100vh-56px)]')}>
       <div className="pointer-events-none absolute inset-0 spotlight-grid opacity-40" />
-      {state.screen !== 'finale' && <Header state={state} />}
+      {state.screen !== 'finale' && state.screen !== 'join' && <Header state={state} />}
       <main className="relative z-10 min-h-0 flex-1 p-[clamp(14px,2vw,36px)]">
-        {state.screen === 'finale' ? <FinaleStage state={state} />
+        {state.screen === 'join' ? <JoinStage state={state} />
+          : state.screen === 'finale' ? <FinaleStage state={state} />
           : state.screen === 'board' ? <BoardStage state={state} />
             : showLot && state.live ? <LotStage state={state} /> : <IdleStage state={state} />}
       </main>

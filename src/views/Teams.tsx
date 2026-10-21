@@ -3,6 +3,7 @@ import { ROUNDS, standings, teamRows, useStore, type TeamRow } from '../store';
 import { money } from '../lib/util';
 import { Btn, cx, Field, Modal, TeamDot, toast } from '../components/ui';
 import { Podium, Thumb } from '../components/bits';
+import { CalcFinalBtn } from './Console';
 
 export function TeamsView() {
   const { state, dispatch } = useStore();
@@ -18,7 +19,7 @@ export function TeamsView() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-[family-name:var(--font-display)] text-5xl font-black uppercase">Teams & scores</h1>
-          <p className="text-muted">Starting purse {money(state.settings.startPurse)} · {state.settings.ptsPerCr} point per full ₹1 Cr left · everything updates after each sale</p>
+          <p className="text-muted">Starting purse {money(state.settings.startPurse)} · {state.finalized ? <span className="text-ok">final points calculated ({state.settings.ptsPerCr} point per full ₹1 Cr left)</span> : 'purse points are added when you calculate final points'} · updates after each sale</p>
         </div>
         <div className="flex gap-2">
           <Btn size="sm" variant={sort === 'rank' ? 'gold' : 'subtle'} onClick={() => setSort('rank')}>By rank</Btn>
@@ -65,7 +66,8 @@ export function TeamsView() {
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-xs text-dim">Final points = player points + bonus points + purse points (1 per full ₹1 Cr left; ₹2.5 Cr left = 2 points).</p>
+      <p className="mt-2 text-xs text-dim">Final points = player points + bonus points + purse points (1 per full ₹1 Cr left; ₹2.5 Cr left = 2 points). Purse points stay at 0 until “Calculate final points”.</p>
+      <div className="mt-3 max-w-sm">{state.finalized ? <Btn size="sm" variant="ghost" onClick={() => dispatch({ type: 'FINALIZE', on: false })}>↶ Undo final calculation</Btn> : <CalcFinalBtn />}</div>
 
       <AdjustModal row={adj} onClose={() => setAdj(null)} />
       <Modal open={!!openRow} onClose={() => setOpen(null)} title={openRow?.team.name ?? ''} wide>

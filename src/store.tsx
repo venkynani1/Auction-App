@@ -24,7 +24,7 @@ export interface Item {
 export interface Team { id: string; name: string; color: string }
 export interface Adj { id: string; teamId: string; pts: number; cash: number; label: string; at: number }
 export interface Live { itemId: string; bid: number; teamId: string | null; bids: number; phase: 'bidding' | 'sold' | 'unsold' }
-export type Screen = 'lot' | 'board' | 'finale';
+export type Screen = 'lot' | 'board' | 'finale' | 'join';
 
 export interface State {
   v: 2;
@@ -36,6 +36,8 @@ export interface State {
   live: Live | null;
   screen: Screen;
   finaleStep: number;          // 0 nothing, 1 third, 2 second, 3 champion
+  finalized: boolean;          // purse points only count after 'Calculate final points'
+  rooms: { open: boolean; code: string };
   log: { at: number; text: string }[];
   flash: { id: string; kind: 'sold' | 'unsold' | 'slip' | 'round'; at: number } | null;
   rev: number;
@@ -52,10 +54,12 @@ export const ROUNDS: Record<RoundNo, { name: string; short: string; color: strin
 export const SLIPS: Record<SlipId, { title: string; text: string }> = {
   points51: { title: 'Instant 51 points', text: 'The team gets 51 points straight away.' },
   swap: { title: 'Player swap', text: 'Swap one of your players with a player from another team.' },
-  battery: { title: 'Battery bonus', text: 'Pick one person from another team. You get points equal to their phone battery %.' },
+  battery: { title: 'Battery bonus', text: 'Pick one person from another team. You get double their phone battery % as points.' },
   cash10: { title: '₹10 Cr cash', text: 'You get ₹10 Cr added to your purse.' },
   double: { title: 'Double spend', text: 'You get 2 points for every ₹1 Cr you have spent.' },
 };
+
+export const roomCode = () => Array.from({ length: 6 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('');
 
 export function makeTeams(n: number, existing: Team[] = []): Team[] {
   return Array.from({ length: n }, (_, i) => existing[i] ?? { id: uid('t'), name: `Team ${i + 1}`, color: teamColor(i) });
@@ -73,6 +77,8 @@ export function freshState(): State {
     live: null,
     screen: 'lot',
     finaleStep: 0,
+    finalized: false,
+    rooms: { open: false, code: roomCode() },
     log: [],
     flash: null,
     rev: 0,
@@ -96,7 +102,8 @@ export function teamRows(s: State): TeamRow[] {
     const bonusCash = round2(adjs.reduce((a, x) => a + x.cash, 0));
     const remaining = round2(s.settings.startPurse + bonusCash - spent);
     const points = itemPts + bonusPts;
-    const pursePts = Math.max(0, Math.floor(remaining + 1e-9)) * s.settings.ptsPerCr;
+    // Purse points are added only once the host presses 'Calculate final points'.
+    const pursePts = s.finalized ? Math.max(0, Math.floor(remaining + 1e-9)) * s.settings.ptsPerCr : 0;
     return { team, index, items, spent, itemPts, bonusPts, bonusCash, remaining, points, pursePts, final: points + pursePts, rank: 0 };
   });
   rows.slice().sort((a, b) => b.final - a.final || b.remaining - a.remaining || a.index - b.index).forEach((r, i) => (r.rank = i + 1));
@@ -132,6 +139,9 @@ export type Action =
   | { type: 'SET_ROUND'; round: RoundNo }
   | { type: 'SET_SCREEN'; screen: Screen }
   | { type: 'FINALE_STEP'; step: number }
+  | { type: 'FINALIZE'; on: boolean }
+  | { type: 'ROOMS_OPEN'; open: boolean }
+  | { type: 'ROOMS_NEW_CODE' }
   | { type: 'SETTINGS'; patch: Partial<State['settings']> }
   | { type: 'TEAMS_COUNT'; n: number }
   | { type: 'TEAM_RENAME'; id: string; name: string }
@@ -208,9 +218,10 @@ export function reducer(s: State, a: Action): State {
       if (a.slip === 'points51') d.adjs.push({ id: uid('a'), teamId: t.id, pts: 51, cash: 0, label: `Mystery: ${def.title}`, at: Date.now() });
       if (a.slip === 'cash10') d.adjs.push({ id: uid('a'), teamId: t.id, pts: 0, cash: 10, label: `Mystery: ${def.title}`, at: Date.now() });
       if (a.slip === 'battery') {
-        const v = Math.max(0, Math.round(a.value ?? 0));
-        d.adjs.push({ id: uid('a'), teamId: t.id, pts: v, cash: 0, label: `Mystery: battery ${v}%`, at: Date.now() });
-        note = `${t.name} gets ${v} points (battery ${v}%).`;
+        const pct = Math.max(0, Math.round(a.value ?? 0));
+        const v = pct * 2;
+        d.adjs.push({ id: uid('a'), teamId: t.id, pts: v, cash: 0, label: `Mystery: battery ${pct}% × 2`, at: Date.now() });
+        note = `${t.name} gets ${v} points (battery ${pct}% × 2).`;
       }
       if (a.slip === 'double') {
         const spent = teamRows(d).find((r) => r.team.id === t.id)!.spent;
@@ -254,11 +265,29 @@ export function reducer(s: State, a: Action): State {
       d.flash = { id: uid('f'), kind: 'round', at: Date.now() };
       break;
     case 'SET_SCREEN':
+      if (a.screen === 'finale' && !d.finalized) return s;
       d.screen = a.screen;
       break;
     case 'FINALE_STEP':
+      if (!d.finalized) return s;
       d.finaleStep = Math.max(0, Math.min(3, a.step));
       d.screen = 'finale';
+      break;
+    case 'FINALIZE':
+      if (a.on && live?.phase === 'bidding') return s;
+      d.finalized = a.on;
+      d.finaleStep = 0;
+      if (a.on) { d.live = null; d.screen = 'board'; log(d, 'Final points calculated: purse points added for every team'); }
+      else { if (d.screen === 'finale') d.screen = 'board'; log(d, 'Final calculation undone: purse points removed'); }
+      break;
+    case 'ROOMS_OPEN':
+      d.rooms.open = a.open;
+      if (a.open) d.screen = 'join';
+      else if (d.screen === 'join') d.screen = 'lot';
+      log(d, a.open ? 'Team rooms opened' : 'Team rooms closed');
+      break;
+    case 'ROOMS_NEW_CODE':
+      d.rooms.code = roomCode();
       break;
     case 'SETTINGS':
       Object.assign(d.settings, a.patch);
@@ -306,7 +335,7 @@ export function reducer(s: State, a: Action): State {
       break;
     case 'RESET_SALES':
       d.items.forEach((i) => Object.assign(i, { status: 'available', teamId: undefined, price: undefined, soldAt: undefined, slip: undefined, slipNote: undefined }));
-      Object.assign(d, { adjs: [], live: null, round: 1, screen: 'lot', finaleStep: 0, flash: null, log: [] });
+      Object.assign(d, { adjs: [], live: null, round: 1, screen: 'lot', finaleStep: 0, finalized: false, flash: null, log: [] });
       log(d, 'All sales and adjustments cleared');
       break;
   }
@@ -318,17 +347,21 @@ export function reducer(s: State, a: Action): State {
 // ------------------------------------------------------------------ store
 const KEY = 'bidwars-live:state';
 const isState = (x: unknown): x is State => !!x && (x as State).v === 2 && Array.isArray((x as State).teams) && Array.isArray((x as State).items);
+/** Fill in fields added after a save was made. */
+function normalize(st: State): State {
+  return { ...st, finalized: st.finalized ?? false, rooms: st.rooms?.code ? st.rooms : { open: false, code: roomCode() } };
+}
 
 function load(): State {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) || 'null');
-    if (isState(v)) return v;
+    if (isState(v)) return normalize(v);
   } catch { /* ignore */ }
   return freshState();
 }
 
 export const parseBackup = (text: string): State | null => {
-  try { const v = JSON.parse(text); const st = v?.state ?? v; return isState(st) ? st : null; } catch { return null; }
+  try { const v = JSON.parse(text); const st = v?.state ?? v; return isState(st) ? normalize(st) : null; } catch { return null; }
 };
 
 interface Store { state: State; dispatch: (a: Action) => void; undo: () => void; canUndo: boolean; saved: boolean }
@@ -372,7 +405,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const accept = (s: unknown) => {
       if (!isState(s)) return;
-      if (s.rev > ref.current.rev || (s.rev === ref.current.rev && s.at > ref.current.at)) { ref.current = s; setState(s); }
+      if (s.rev > ref.current.rev || (s.rev === ref.current.rev && s.at > ref.current.at)) { const n = normalize(s); ref.current = n; setState(n); }
     };
     try {
       chan.current = new BroadcastChannel('bidwars-live');
