@@ -12,6 +12,7 @@ import { PlayersView } from './views/Players';
 import { SetupView } from './views/Setup';
 import { parseRoomHash, RoomApp } from './views/Room';
 import { useRoomPublisher } from './lib/useRoomPublisher';
+import { useTeamBids } from './lib/useBids';
 
 type Route = 'console' | 'projector' | 'show' | 'teams' | 'players' | 'setup';
 const ROUTES: Route[] = ['console', 'projector', 'show', 'teams', 'players', 'setup'];
@@ -25,7 +26,8 @@ function Shell() {
   useEffect(() => { const on = () => { setRoute(read()); window.scrollTo(0, 0); }; window.addEventListener('hashchange', on); return () => window.removeEventListener('hashchange', on); }, []);
   useEffect(() => { try { sessionStorage.setItem('bw-mute', muted ? '1' : '0'); } catch { /* ignore */ } }, [muted]);
   useEffect(() => { void initPhotos(); }, []);
-  const roomLink = useRoomPublisher(state, true);
+  const { bids: teamBids } = useTeamBids(state);
+  const roomLink = useRoomPublisher(state, true, new Set(teamBids.map((b) => b.no)));
   useEffect(() => {
     if (route !== 'show') return;
     const k = (e: KeyboardEvent) => { if (e.key === 'Escape') location.hash = 'projector'; };

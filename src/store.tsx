@@ -21,7 +21,7 @@ export interface Item {
   slip?: SlipId;             // round 4: which slip was inside
   slipNote?: string;
 }
-export interface Team { id: string; name: string; color: string }
+export interface Team { id: string; name: string; color: string; pin: string }
 export interface Adj { id: string; teamId: string; pts: number; cash: number; label: string; at: number }
 export interface Live { itemId: string; bid: number; teamId: string | null; bids: number; phase: 'bidding' | 'sold' | 'unsold' }
 export type Screen = 'lot' | 'board' | 'finale' | 'join' | 'bids';
@@ -31,7 +31,7 @@ export interface TeamBids { id: string; open: boolean; itemId: string | null; sh
 
 export interface State {
   v: 2;
-  settings: { eventName: string; startPurse: number; ptsPerCr: number };
+  settings: { eventName: string; startPurse: number; ptsPerCr: number; teamPins: boolean };
   teams: Team[];
   items: Item[];
   adjs: Adj[];
@@ -65,15 +65,23 @@ export const SLIPS: Record<SlipId, { title: string; text: string }> = {
 
 export const roomCode = () => Array.from({ length: 6 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('');
 
+/** 4-digit team PIN; avoids easy ones like 0000 or 1234. */
+export function makePin(): string {
+  for (;;) {
+    const p = String(Math.floor(1000 + Math.random() * 9000));
+    if (!/^(\d)\1{3}$/.test(p) && !'0123456789'.includes(p) && !'9876543210'.includes(p)) return p;
+  }
+}
+
 export function makeTeams(n: number, existing: Team[] = []): Team[] {
-  return Array.from({ length: n }, (_, i) => existing[i] ?? { id: uid('t'), name: `Team ${i + 1}`, color: teamColor(i) });
+  return Array.from({ length: n }, (_, i) => existing[i] ?? { id: uid('t'), name: `Team ${i + 1}`, color: teamColor(i), pin: makePin() });
 }
 
 export function freshState(): State {
   const lots: Record<number, number> = {};
   return {
     v: 2,
-    settings: { eventName: 'BID WARS', startPurse: 100, ptsPerCr: 1 },
+    settings: { eventName: 'BID WARS', startPurse: 100, ptsPerCr: 1, teamPins: true },
     teams: makeTeams(20),
     items: SEED_ITEMS.map((s) => ({ ...s, id: uid('p'), lot: (lots[s.round] = (lots[s.round] ?? 0) + 1), status: 'available' as const, round: s.round as RoundNo, points: s.points as number | null })),
     adjs: [],
@@ -156,6 +164,7 @@ export type Action =
   | { type: 'SETTINGS'; patch: Partial<State['settings']> }
   | { type: 'TEAMS_COUNT'; n: number }
   | { type: 'TEAM_RENAME'; id: string; name: string }
+  | { type: 'TEAM_PINS_NEW'; id?: string }
   | { type: 'TEAM_NAMES'; names: string[] }
   | { type: 'ITEM_SAVE'; item: Partial<Item> & { id?: string } }
   | { type: 'ITEM_DELETE'; id: string }
@@ -353,6 +362,10 @@ export function reducer(s: State, a: Action): State {
       t.name = a.name;
       break;
     }
+    case 'TEAM_PINS_NEW':
+      for (const t of d.teams) if (!a.id || t.id === a.id) t.pin = makePin();
+      log(d, a.id ? `New PIN for ${team(a.id)?.name}` : 'New PINs for every team');
+      break;
     case 'TEAM_NAMES': {
       const names = a.names.map((n) => n.trim()).filter(Boolean);
       if (!names.length) return s;
@@ -397,15 +410,26 @@ const KEY = 'bidwars-live:state';
 const isState = (x: unknown): x is State => !!x && (x as State).v === 2 && Array.isArray((x as State).teams) && Array.isArray((x as State).items);
 /** Fill in fields added after a save was made. */
 function normalize(st: State): State {
-  return { ...st, finalized: st.finalized ?? false, bids: st.bids ?? null, rooms: st.rooms?.code ? st.rooms : { open: false, code: roomCode() } };
+  return {
+    ...st,
+    settings: { ...st.settings, teamPins: st.settings.teamPins ?? true },
+    teams: st.teams.map((t) => (t.pin ? t : { ...t, pin: makePin() })),
+    finalized: st.finalized ?? false, bids: st.bids ?? null, rooms: st.rooms?.code ? st.rooms : { open: false, code: roomCode() } };
 }
 
 function load(): State {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) || 'null');
-    if (isState(v)) return normalize(v);
+    if (isState(v)) {
+      const n = normalize(v);
+      // New PINs were made for an older save: store them now so every window sees the same ones.
+      if (v.teams.some((t) => !t.pin)) { try { localStorage.setItem(KEY, JSON.stringify(n)); } catch { /* ignore */ } }
+      return n;
+    }
   } catch { /* ignore */ }
-  return freshState();
+  const f = freshState();
+  try { localStorage.setItem(KEY, JSON.stringify(f)); } catch { /* ignore */ }
+  return f;
 }
 
 export const parseBackup = (text: string): State | null => {
