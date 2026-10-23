@@ -54,11 +54,27 @@ Data stays in that browser. Use **Save backup with photos** to move everything t
 - After the final calculation the phone shows the final points; the team's position appears once the champion is revealed on the projector.
 - The auction laptop must be online. Rooms need the one-time Firebase setup below.
 
+### Team bids from phones
+
+- In **Console → Team bids**, press **Open team bids** (works during a lot or on its own). Every phone gets a **BID** button.
+  Each team bids once, in crores, up to its purse. The time is taken from Firebase's server clock, so "fastest" is fair.
+- Press **Unique**, **Highest** or **Lowest** to show the result on the projector:
+  - **Highest**: biggest amount wins. **Lowest**: smallest amount wins.
+  - **Unique**: the highest amount that no other team bid (equal amounts are marked CLASH). If every amount clashes, the fastest highest bid wins.
+  - Equal amounts always go to the team that bid first.
+- **Use winner** puts that team and amount on the current lot; then press **SOLD** as usual. **End team bidding** removes the BID button.
+
+## Activity points
+
+**Console → Activity points**: type the activity name and points, tap one or more teams, press **Give**. Negative points take points away.
+It appears in the standings and on each team's phone, and **Undo** works. (The **± Points / cash** button on the Teams page still works too.)
+
 ### Team rooms: one-time Firebase setup (about 10 minutes, free)
 
 1. Go to [console.firebase.google.com](https://console.firebase.google.com) → **Add project** (Analytics not needed).
 2. **Build → Realtime Database → Create database** (pick a location, start in *locked mode*).
    Open the **Rules** tab, paste the contents of `database.rules.json` from this repo, and **Publish**.
+   (Paste it again whenever this file changes: team bids need the newer rules.)
 3. **Build → Authentication → Get started → Sign-in method → Anonymous → Enable.**
 4. **Project settings (⚙) → Your apps → Web (`</>`)** → register an app (no hosting). Copy the config values.
 5. In **Vercel → your project → Settings → Environment Variables**, add these (see `.env.example`):

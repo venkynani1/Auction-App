@@ -24,7 +24,10 @@ export interface Item {
 export interface Team { id: string; name: string; color: string }
 export interface Adj { id: string; teamId: string; pts: number; cash: number; label: string; at: number }
 export interface Live { itemId: string; bid: number; teamId: string | null; bids: number; phase: 'bidding' | 'sold' | 'unsold' }
-export type Screen = 'lot' | 'board' | 'finale' | 'join';
+export type Screen = 'lot' | 'board' | 'finale' | 'join' | 'bids';
+export type BidMode = 'unique' | 'highest' | 'lowest';
+/** A window in which teams bid from their phones. Bids themselves live in Firebase under this id. */
+export interface TeamBids { id: string; open: boolean; itemId: string | null; show: BidMode | null; at: number }
 
 export interface State {
   v: 2;
@@ -38,6 +41,7 @@ export interface State {
   finaleStep: number;          // 0 nothing, 1 third, 2 second, 3 champion
   finalized: boolean;          // purse points only count after 'Calculate final points'
   rooms: { open: boolean; code: string };
+  bids: TeamBids | null;
   log: { at: number; text: string }[];
   flash: { id: string; kind: 'sold' | 'unsold' | 'slip' | 'round'; at: number } | null;
   rev: number;
@@ -79,6 +83,7 @@ export function freshState(): State {
     finaleStep: 0,
     finalized: false,
     rooms: { open: false, code: roomCode() },
+    bids: null,
     log: [],
     flash: null,
     rev: 0,
@@ -136,6 +141,12 @@ export type Action =
   | { type: 'REQUEUE'; itemId: string }
   | { type: 'ADJ_ADD'; teamId: string; pts: number; cash: number; label: string }
   | { type: 'ADJ_DEL'; id: string }
+  | { type: 'ADJ_BULK'; teamIds: string[]; pts: number; label: string }
+  | { type: 'BIDS_OPEN' }
+  | { type: 'BIDS_CLOSE' }
+  | { type: 'BIDS_SHOW'; mode: BidMode | null }
+  | { type: 'BIDS_END' }
+  | { type: 'BIDS_APPLY'; teamId: string; amount: number }
   | { type: 'SET_ROUND'; round: RoundNo }
   | { type: 'SET_SCREEN'; screen: Screen }
   | { type: 'FINALE_STEP'; step: number }
@@ -256,6 +267,42 @@ export function reducer(s: State, a: Action): State {
       log(d, `${team(a.teamId)!.name}: ${a.pts ? `${a.pts > 0 ? '+' : ''}${a.pts} pts ` : ''}${a.cash ? `${a.cash > 0 ? '+' : '−'}${money(Math.abs(a.cash))} ` : ''}(${a.label || 'adjustment'})`);
       break;
     }
+    case 'ADJ_BULK': {
+      const ts = a.teamIds.map((id) => team(id)).filter(Boolean) as Team[];
+      if (!ts.length || !a.pts) return s;
+      const label = a.label.trim() || 'Activity';
+      for (const t of ts) d.adjs.push({ id: uid('a'), teamId: t.id, pts: a.pts, cash: 0, label, at: Date.now() });
+      log(d, `${label}: ${a.pts > 0 ? '+' : ''}${a.pts} pts to ${ts.length === 1 ? ts[0]!.name : `${ts.length} teams (${ts.map((t) => t.name).join(', ')})`}`);
+      break;
+    }
+    case 'BIDS_OPEN':
+      d.bids = { id: uid('b'), open: true, itemId: live?.phase === 'bidding' ? live.itemId : null, show: null, at: Date.now() };
+      log(d, `Team bids opened${d.bids.itemId ? ` for ${item(d.bids.itemId)?.name}` : ''}`);
+      break;
+    case 'BIDS_CLOSE':
+      if (!d.bids?.open) return s;
+      d.bids.open = false;
+      log(d, 'Team bids closed');
+      break;
+    case 'BIDS_SHOW':
+      if (!d.bids) return s;
+      d.bids.show = a.mode;
+      if (a.mode) { d.bids.open = false; d.screen = 'bids'; } else if (d.screen === 'bids') d.screen = 'lot';
+      break;
+    case 'BIDS_END':
+      if (!d.bids) return s;
+      d.bids = null;
+      if (d.screen === 'bids') d.screen = 'lot';
+      break;
+    case 'BIDS_APPLY': {
+      if (!live || live.phase !== 'bidding' || !team(a.teamId)) return s;
+      live.bid = Math.max(0, round2(a.amount));
+      if (live.teamId !== a.teamId) live.bids++;
+      live.teamId = a.teamId;
+      d.screen = 'lot';
+      log(d, `Team bid used: ${team(a.teamId)!.name} at ${money(live.bid)}`);
+      break;
+    }
     case 'ADJ_DEL':
       d.adjs = d.adjs.filter((x) => x.id !== a.id);
       break;
@@ -266,6 +313,7 @@ export function reducer(s: State, a: Action): State {
       break;
     case 'SET_SCREEN':
       if (a.screen === 'finale' && !d.finalized) return s;
+      if (a.screen === 'bids' && !d.bids?.show) return s;
       d.screen = a.screen;
       break;
     case 'FINALE_STEP':
@@ -349,7 +397,7 @@ const KEY = 'bidwars-live:state';
 const isState = (x: unknown): x is State => !!x && (x as State).v === 2 && Array.isArray((x as State).teams) && Array.isArray((x as State).items);
 /** Fill in fields added after a save was made. */
 function normalize(st: State): State {
-  return { ...st, finalized: st.finalized ?? false, rooms: st.rooms?.code ? st.rooms : { open: false, code: roomCode() } };
+  return { ...st, finalized: st.finalized ?? false, bids: st.bids ?? null, rooms: st.rooms?.code ? st.rooms : { open: false, code: roomCode() } };
 }
 
 function load(): State {

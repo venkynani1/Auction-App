@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { queue, ROUNDS, SLIPS, teamRows, useStore, type Item, type RoundNo, type SlipId, type State } from '../store';
+import { queue, ROUNDS, SLIPS, teamRows, useStore, type BidMode, type Item, type RoundNo, type SlipId, type State } from '../store';
+import { roomsConfigured } from '../lib/rooms';
+import { lag, MODE_LABEL, rankBids } from '../lib/bids';
+import { useTeamBids } from '../lib/useBids';
 import { money, MONEY, pad2, round2, timeOfDay } from '../lib/util';
 import { play, unlockAudio } from '../lib/sound';
 import { Photo, Standings, Thumb } from '../components/bits';
@@ -54,6 +57,8 @@ export function Console({ muted }: { muted: boolean }) {
         </section>
         <aside className="flex min-w-0 flex-col gap-4">
           <ScreenControl state={state} />
+          <TeamBidsPanel state={state} />
+          <ActivityPoints state={state} />
           <div className="panel p-4">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="font-[family-name:var(--font-display)] text-2xl font-black uppercase">Standings</h3>
@@ -392,3 +397,123 @@ function UpNext({ state }: { state: State }) {
   );
 }
 
+
+function TeamBidsPanel({ state }: { state: State }) {
+  const { dispatch } = useStore();
+  const { bids, error } = useTeamBids(state);
+  const ub = state.bids;
+  const head = <h3 className="font-[family-name:var(--font-display)] text-2xl font-black uppercase">Team bids <span className="text-base text-muted">from phones</span></h3>;
+  if (!roomsConfigured || !state.rooms.open) {
+    return (
+      <div className="panel p-4">
+        {head}
+        <p className="mt-1 text-sm text-muted">{roomsConfigured ? <>Open the team rooms in <a href="#setup" className="text-gold-2 underline">Setup</a> first; then teams can bid from their phones.</> : 'Needs team rooms (Firebase) to be set up.'}</p>
+      </div>
+    );
+  }
+  if (!ub) {
+    const lot = state.live?.phase === 'bidding' ? state.items.find((i) => i.id === state.live!.itemId) : undefined;
+    return (
+      <div className="panel p-4">
+        {head}
+        <p className="mt-1 text-sm text-muted">Every team gets a BID button on its phone and can bid once. You then show the unique, highest or lowest bid on the screen.</p>
+        <Btn variant="gold" className="mt-3 w-full" onClick={() => { dispatch({ type: 'BIDS_OPEN' }); toast('Bids are open on every phone.', 'ok'); }}>📱 Open team bids{lot ? ` for ${lot.name}` : ''}</Btn>
+      </div>
+    );
+  }
+  const mode: BidMode = ub.show ?? 'highest';
+  const ranked = rankBids(bids, mode);
+  const win = ranked[0];
+  const first = Math.min(...bids.map((b) => b.at));
+  const rows = teamRows(state);
+  const winTeam = win ? state.teams[win.no - 1] : undefined;
+  const winRow = winTeam ? rows.find((r) => r.team.id === winTeam.id) : undefined;
+  const canUse = !!win && !!winTeam && state.live?.phase === 'bidding';
+  const short = !!winRow && !!win && win.amount > winRow.remaining + 1e-9;
+  const forLot = ub.itemId ? state.items.find((i) => i.id === ub.itemId)?.name : null;
+  return (
+    <div className="panel p-4" style={{ borderColor: 'var(--color-gold)' }}>
+      {head}
+      <div className="mt-1 flex items-center justify-between gap-2 text-sm">
+        <span className={ub.open ? 'text-ok' : 'text-muted'}>{ub.open ? '● Open' : 'Closed'} · <b className="num">{bids.length}</b> of {state.teams.length} teams bid{forLot ? ` · ${forLot}` : ''}</span>
+        {ub.open && <Btn size="xs" variant="outline" onClick={() => dispatch({ type: 'BIDS_CLOSE' })}>Close bids</Btn>}
+      </div>
+      {error && <p className="mt-1 text-xs text-live">Can't read bids. Check that the Firebase rules include “bids” (see README).</p>}
+      <Label className="mt-3 mb-1.5">Show on the projector</Label>
+      <div className="grid grid-cols-3 gap-1.5">
+        {(['unique', 'highest', 'lowest'] as BidMode[]).map((m) => (
+          <Btn key={m} size="sm" variant={ub.show === m ? 'gold' : 'subtle'} disabled={!bids.length} onClick={() => dispatch({ type: 'BIDS_SHOW', mode: m })}>{MODE_LABEL[m].replace(' bid', '')}</Btn>
+        ))}
+      </div>
+      {ub.show && <Btn size="xs" variant="ghost" className="mt-1" onClick={() => dispatch({ type: 'BIDS_SHOW', mode: null })}>Hide from screen</Btn>}
+      {ranked.length > 0 && (
+        <div className="mt-3 flex max-h-48 flex-col gap-1 overflow-auto scroll-thin text-sm">
+          <div className="label">{MODE_LABEL[mode]} order{ub.show ? '' : ' (preview)'}</div>
+          {ranked.map((b) => (
+            <div key={b.no} className={cx('grid grid-cols-[1.4rem_minmax(0,1fr)_auto_3.6rem] items-center gap-2 rounded-md px-2 py-1', b.winner ? 'bg-gold/15' : 'bg-panel-2/50')}>
+              <span className={cx('font-bold num', b.winner ? 'text-gold-2' : 'text-dim')}>{b.place}</span>
+              <span className="truncate">{b.name}{b.clash && mode === 'unique' ? <span className="ml-1 text-xs text-live">clash</span> : null}</span>
+              <span className="font-semibold num">{money(b.amount)}</span>
+              <span className="text-right text-xs text-dim num">{lag(b.at, first)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="mt-3 grid gap-1.5">
+        <Btn variant="gold" disabled={!canUse || short} title={!canUse ? 'Open a lot first (NEXT LOT) to use the winning bid' : short ? 'That team does not have enough purse' : undefined}
+          onClick={() => { dispatch({ type: 'BIDS_APPLY', teamId: winTeam!.id, amount: win!.amount }); toast(`${winTeam!.name} leads at ${money(win!.amount)}. Press SOLD to confirm.`, 'ok'); }}>
+          Use winner{win ? `: ${win.name} · ${money(win.amount)}` : ''}
+        </Btn>
+        {short && <p className="text-xs text-live">{win!.name} only has {money(winRow!.remaining)} left.</p>}
+        <Btn size="sm" variant="ghost" onClick={async () => { if (!ub.open || await confirmDialog('End team bidding?', 'Bids are still open. Phones stop showing the BID button.', 'End bidding')) dispatch({ type: 'BIDS_END' }); }}>End team bidding</Btn>
+      </div>
+    </div>
+  );
+}
+
+function ActivityPoints({ state }: { state: State }) {
+  const { dispatch } = useStore();
+  const [label, setLabel] = useState('');
+  const [pts, setPts] = useState('');
+  const [sel, setSel] = useState<string[]>([]);
+  const [filter, setFilter] = useState('');
+  const n = Number(pts);
+  const ok = pts !== '' && Number.isFinite(n) && n !== 0 && sel.length > 0;
+  const shown = state.teams.filter((t) => t.name.toLowerCase().includes(filter.toLowerCase()));
+  const toggle = (id: string) => setSel((x) => (x.includes(id) ? x.filter((y) => y !== id) : [...x, id]));
+  const give = () => {
+    if (!ok) return;
+    dispatch({ type: 'ADJ_BULK', teamIds: sel, pts: Math.round(n), label: label || 'Activity' });
+    toast(`${n > 0 ? '+' : ''}${Math.round(n)} pts to ${sel.length} team${sel.length > 1 ? 's' : ''}.`, 'ok');
+    setSel([]);
+  };
+  return (
+    <div className="panel p-4">
+      <h3 className="font-[family-name:var(--font-display)] text-2xl font-black uppercase">Activity points</h3>
+      <p className="mt-0.5 text-xs text-dim">For games between rounds. Shows on the team's phone and in the standings. Undo works.</p>
+      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_6rem] gap-2">
+        <input id="act-label" className="field !py-1.5" placeholder="Activity name (e.g. Quiz)" value={label} onChange={(e) => setLabel(e.target.value)} />
+        <input id="act-pts" className="field !py-1.5 num" type="number" step="1" placeholder="Points" value={pts} onChange={(e) => setPts(e.target.value)} />
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <input id="act-filter" className="field !py-1 text-sm" placeholder="Find team" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <Btn size="xs" variant="ghost" onClick={() => setSel(state.teams.map((t) => t.id))}>All</Btn>
+        <Btn size="xs" variant="ghost" disabled={!sel.length} onClick={() => setSel([])}>None</Btn>
+      </div>
+      <div className="mt-2 flex max-h-40 flex-wrap gap-1.5 overflow-auto scroll-thin">
+        {shown.map((t) => {
+          const on = sel.includes(t.id);
+          return (
+            <button key={t.id} onClick={() => toggle(t.id)} className={cx('flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs font-semibold transition', on ? 'text-fg' : 'border-line text-muted hover:text-fg')}
+              style={on ? { borderColor: t.color, background: `${t.color}30` } : undefined}>
+              <TeamDot color={t.color} size={7} />{t.name}{on && ' ✓'}
+            </button>
+          );
+        })}
+      </div>
+      <Btn variant={n < 0 ? 'danger' : 'ok'} className="mt-3 w-full" disabled={!ok} onClick={give}>
+        {ok ? `${n > 0 ? 'Give +' : 'Take '}${Math.abs(Math.round(n))} pts ${n > 0 ? 'to' : 'from'} ${sel.length} team${sel.length > 1 ? 's' : ''}` : 'Pick teams and points'}
+      </Btn>
+    </div>
+  );
+}

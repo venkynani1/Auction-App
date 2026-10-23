@@ -7,6 +7,8 @@ import { BlockBar, cx, TeamDot } from '../components/ui';
 import { confetti } from '../components/Confetti';
 import { JoinQR } from '../components/JoinQR';
 import { joinUrl } from '../lib/rooms';
+import { lag, MODE_LABEL, MODE_RULE, rankBids } from '../lib/bids';
+import { useTeamBids } from '../lib/useBids';
 
 const FLASH_MS = { sold: 4200, unsold: 2400, slip: 5500, round: 3200 } as const;
 
@@ -159,6 +161,52 @@ function BoardStage({ state }: { state: State }) {
   );
 }
 
+function BidsStage({ state }: { state: State }) {
+  const mode = state.bids!.show!;
+  const { bids } = useTeamBids(state);
+  const ranked = rankBids(bids, mode);
+  const win = ranked[0];
+  const first = Math.min(...bids.map((b) => b.at));
+  const color = (no: number) => state.teams[no - 1]?.color ?? '#F5B833';
+  const lot = state.bids!.itemId ? state.items.find((i) => i.id === state.bids!.itemId) : undefined;
+  const winKey = win ? `${mode}-${win.no}` : '';
+  useEffect(() => {
+    if (!win) return;
+    confetti([color(win.no), '#F5B833', '#FFD977', '#FFFFFF'], 160, 'center');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [winKey]);
+  return (
+    <div className="grid h-full min-h-0 grid-cols-1 gap-[clamp(14px,2vw,36px)] xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+      <div className="flex min-w-0 flex-col justify-center">
+        <div className="label !text-[clamp(13px,1.3vw,22px)] text-gold-2">TEAM BIDS{lot ? ` · ${lot.name.toUpperCase()}` : ''}</div>
+        <h1 className="font-[family-name:var(--font-display)] font-black uppercase leading-[.88] text-[clamp(44px,6.5vw,130px)]">{MODE_LABEL[mode]}</h1>
+        <p className="mt-2 max-w-[38ch] text-[clamp(15px,1.5vw,26px)] text-fg/70">{MODE_RULE[mode]}</p>
+        {win ? (
+          <div key={winKey} className="mt-[clamp(14px,3vh,40px)] rounded-3xl border-2 p-[clamp(14px,2vw,36px)] animate-zoom-in" style={{ borderColor: color(win.no), background: `radial-gradient(circle at 20% 0%, ${color(win.no)}40, var(--color-panel) 70%)` }}>
+            <div className="label !text-[clamp(12px,1.1vw,20px)]">WINNER</div>
+            <div className="break-words font-[family-name:var(--font-display)] font-black uppercase leading-[.9] text-[clamp(36px,5vw,100px)]" style={{ color: color(win.no) }}>{win.name}</div>
+            <div className="mt-2 font-[family-name:var(--font-display)] font-black gold-text num text-[clamp(48px,7vw,140px)] leading-none">{MONEY(win.amount)}</div>
+            {mode === 'unique' && win.clash && <div className="mt-2 text-[clamp(14px,1.3vw,22px)] text-fg/70">No amount was unique, so the fastest highest bid wins.</div>}
+          </div>
+        ) : <div className="mt-8 text-[clamp(20px,2vw,36px)] text-muted">No bids yet…</div>}
+      </div>
+      <div className="min-w-0">
+        <h2 className="mb-3 font-[family-name:var(--font-display)] text-[clamp(22px,2.4vw,44px)] font-black uppercase">All bids <span className="text-muted">({ranked.length})</span></h2>
+        <div className={cx('grid grid-cols-1 gap-x-4 gap-y-1', ranked.length > 12 && 'md:grid-cols-2')}>
+          {ranked.map((b, i) => (
+            <div key={b.no} className={cx('grid grid-cols-[2.2rem_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-3 py-[clamp(4px,.7vh,10px)] text-[clamp(14px,1.25vw,24px)] animate-rise', b.winner ? 'bg-gold/20' : 'bg-panel/80')} style={{ animationDelay: `${Math.min(i, 20) * 40}ms` }}>
+              <span className={cx('font-[family-name:var(--font-display)] font-black num', b.winner ? 'text-gold-2' : 'text-muted')}>{b.place}</span>
+              <span className="flex min-w-0 items-center gap-2"><TeamDot color={color(b.no)} /><span className="truncate font-semibold">{b.name}</span>
+                {mode === 'unique' && b.clash && <span className="shrink-0 rounded bg-live/20 px-1.5 text-[.7em] font-bold text-live">CLASH</span>}</span>
+              <span className="text-right"><span className="font-[family-name:var(--font-display)] font-black num">{MONEY(b.amount)}</span> <span className="text-[.7em] text-dim num">{lag(b.at, first)}</span></span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function JoinStage({ state }: { state: State }) {
   const url = joinUrl(state.rooms.code).replace(/^https?:\/\//, '');
   return (
@@ -254,7 +302,8 @@ export function Projector({ fullscreen }: { fullscreen: boolean }) {
       <div className="pointer-events-none absolute inset-0 spotlight-grid opacity-40" />
       {state.screen !== 'finale' && state.screen !== 'join' && <Header state={state} />}
       <main className="relative z-10 min-h-0 flex-1 p-[clamp(14px,2vw,36px)]">
-        {state.screen === 'join' ? <JoinStage state={state} />
+        {state.screen === 'bids' && state.bids?.show ? <BidsStage state={state} />
+          : state.screen === 'join' ? <JoinStage state={state} />
           : state.screen === 'finale' ? <FinaleStage state={state} />
           : state.screen === 'board' ? <BoardStage state={state} />
             : showLot && state.live ? <LotStage state={state} /> : <IdleStage state={state} />}

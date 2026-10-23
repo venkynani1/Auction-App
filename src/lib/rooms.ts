@@ -4,6 +4,7 @@
 // Database layout:  events/<CODE>/owner          uid of the host laptop (anonymous sign-in)
 //                   events/<CODE>/status         round, current lot, open/closed …
 //                   events/<CODE>/teams/<no>     one node per team (1-based team number)
+//                   events/<CODE>/bids/<win>/<no> one bid per team per bidding window (written by phones)
 import type { FirebaseApp } from 'firebase/app';
 import type { Database } from 'firebase/database';
 import { ROUNDS, SLIPS, teamRows, type State } from '../store';
@@ -33,6 +34,7 @@ export interface RoomStatus {
     leader: number | null; leaderName: string | null; state: 'bidding' | 'sold' | 'unsold';
   };
   reveal: number;          // finale step on the projector (0–3)
+  bidding: null | { id: string; open: boolean; lot: string | null; base: number | null };
   updatedAt: number;
 }
 
@@ -71,6 +73,10 @@ export function buildStatus(s: State): RoomStatus {
       state: s.live.phase,
     } : null,
     reveal: s.finalized ? s.finaleStep : 0,
+    bidding: s.bids ? (() => {
+      const lot = s.bids.itemId ? s.items.find((i) => i.id === s.bids!.itemId) : undefined;
+      return { id: s.bids.id, open: s.bids.open, lot: lot ? lot.name : null, base: lot ? lot.base : null };
+    })() : null,
     updatedAt: Date.now(),
   };
 }
@@ -166,6 +172,13 @@ export async function subscribe<T>(path: string, cb: (v: T | null) => void, onEr
   const { db } = await fb();
   const { ref, onValue } = await import('firebase/database');
   return onValue(ref(db, path), (snap) => cb(snap.val() as T | null), (e) => onError?.(e));
+}
+
+/** Phone side: place this team's one bid. The server stamps the time, so "fastest" is fair across phones. */
+export async function submitBid(code: string, win: string, no: number, amount: number, name: string) {
+  const { db } = await fb();
+  const { ref, set, serverTimestamp } = await import('firebase/database');
+  await set(ref(db, `events/${code}/bids/${win}/${no}`), { amount, at: serverTimestamp(), name });
 }
 
 export function joinUrl(code: string) {
