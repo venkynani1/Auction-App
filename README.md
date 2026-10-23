@@ -58,6 +58,7 @@ Data stays in that browser. Use **Save backup with photos** to move everything t
 
 - Every team has a 4-digit PIN (Setup → Team rooms → **Team PINs**). Phones enter the team number **and** the PIN to join, and the PIN is checked again on every bid,
   so nobody can bid for another team. The database itself rejects a wrong PIN, and PINs can never be read from a phone.
+- **Load my PIN list** (inside Team PINs): paste PINs you already handed out (`1. Team 1: 5603` per line) so they work on this laptop. The PINs are not stored in the code, so they stay private.
 - **Print PIN slips** prints one slip per team (team name, number, PIN). **Copy PIN list** copies them as text. **New PINs** (all, or ↻ for one team) asks phones to enter the new PIN.
 - Bids are hidden from phones; only the auction laptop can see them until you show them on the projector.
 - Turn **PINs off** to go back to number-only joining.

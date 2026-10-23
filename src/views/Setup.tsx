@@ -42,9 +42,27 @@ function printPinSlips(state: ReturnType<typeof useStore>['state'], url: string)
   return true;
 }
 
+/** "1. Team 1: 5603", "1 5603", "Team 1 - 5603" or one PIN per line (in team order). */
+export function parsePinList(text: string): Record<number, string> {
+  const out: Record<number, string> = {};
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  lines.forEach((line, i) => {
+    const pin = /(\d{4})(?!.*\d{4})/.exec(line)?.[1];
+    if (!pin) return;
+    const rest = line.slice(0, line.lastIndexOf(pin));
+    const no = /\d{1,3}/.exec(rest)?.[0];
+    out[no ? Number(no) : i + 1] = pin;
+  });
+  return out;
+}
+
 function TeamPins({ url }: { url: string }) {
   const { state, dispatch } = useStore();
   const [show, setShow] = useState(false);
+  const [paste, setPaste] = useState('');
+  const parsed = parsePinList(paste);
+  const parsedN = Object.keys(parsed).filter((k) => Number(k) >= 1 && Number(k) <= state.teams.length).length;
+  const extra = Object.keys(parsed).length - parsedN;
   const on = state.settings.teamPins;
   const list = state.teams.map((t, i) => `${i + 1}. ${t.name}: ${t.pin}`).join('\n');
   return (
@@ -64,6 +82,13 @@ function TeamPins({ url }: { url: string }) {
             <Btn size="sm" variant="ghost" onClick={() => setShow((x) => !x)}>{show ? 'Hide PINs' : 'Show PINs'}</Btn>
             <Btn size="sm" variant="ghost" onClick={async () => { if (await confirmDialog('Make new PINs for every team?', 'Phones that already joined must enter the new PIN. Print or share the new list.', 'New PINs')) dispatch({ type: 'TEAM_PINS_NEW' }); }}>New PINs</Btn>
           </div>
+          <details className="mt-3 rounded-xl bg-panel/60 p-3">
+            <summary className="cursor-pointer text-sm font-semibold">Load my PIN list (PINs you already handed out)</summary>
+            <p className="mt-2 text-xs text-dim">Paste one line per team, e.g. <code>1. Team 1: 5603</code> or <code>1 5603</code>. The same PINs then work on this laptop.</p>
+            <textarea id="pin-paste" className="field mt-2 min-h-[120px] font-mono text-sm" placeholder={'1. Team 1: 5603\n2. Team 2: 5449\n…'} value={paste} onChange={(e) => setPaste(e.target.value)} />
+            {paste.trim() && <p className="mt-1 text-xs text-muted">Found {parsedN} PIN{parsedN === 1 ? '' : 's'} for teams 1–{state.teams.length}.{extra > 0 ? ` ${extra} more are for team numbers above ${state.teams.length}: set the number of teams first.` : ''}</p>}
+            <Btn size="sm" variant="gold" className="mt-2" disabled={!parsedN} onClick={() => { dispatch({ type: 'TEAM_PINS_SET', pins: parsed }); toast(`PINs loaded for ${parsedN} teams.`, 'ok'); setPaste(''); }}>Use these PINs</Btn>
+          </details>
           {show && (
             <div className="mt-3 grid max-h-64 grid-cols-1 gap-1 overflow-auto text-sm scroll-thin sm:grid-cols-2 lg:grid-cols-3">
               {state.teams.map((t, i) => (

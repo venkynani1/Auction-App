@@ -165,6 +165,7 @@ export type Action =
   | { type: 'TEAMS_COUNT'; n: number }
   | { type: 'TEAM_RENAME'; id: string; name: string }
   | { type: 'TEAM_PINS_NEW'; id?: string }
+  | { type: 'TEAM_PINS_SET'; pins: Record<number, string> }
   | { type: 'TEAM_NAMES'; names: string[] }
   | { type: 'ITEM_SAVE'; item: Partial<Item> & { id?: string } }
   | { type: 'ITEM_DELETE'; id: string }
@@ -360,6 +361,16 @@ export function reducer(s: State, a: Action): State {
       const t = team(a.id);
       if (!t) return s;
       t.name = a.name;
+      break;
+    }
+    case 'TEAM_PINS_SET': {
+      let n = 0;
+      for (const [k, pin] of Object.entries(a.pins)) {
+        const t = d.teams[Number(k) - 1];
+        if (t && /^\d{4}$/.test(pin)) { t.pin = pin; n++; }
+      }
+      if (!n) return s;
+      log(d, `Loaded PINs for ${n} teams`);
       break;
     }
     case 'TEAM_PINS_NEW':
