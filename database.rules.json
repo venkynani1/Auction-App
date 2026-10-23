@@ -2,20 +2,33 @@
   "rules": {
     "events": {
       "$code": {
-        ".read": true,
         "owner": {
+          ".read": true,
           ".write": "auth != null && (!data.exists() || data.val() === auth.uid)"
         },
         "status": {
+          ".read": true,
           ".write": "auth != null && root.child('events').child($code).child('owner').val() === auth.uid"
         },
         "teams": {
+          ".read": true,
           ".write": "auth != null && root.child('events').child($code).child('owner').val() === auth.uid"
         },
+        "pins": {
+          ".write": "auth != null && root.child('events').child($code).child('owner').val() === auth.uid"
+        },
+        "pinCheck": {
+          "$team": {
+            "$device": {
+              ".write": "newData.exists() && root.child('events').child($code).child('pins').child($team).exists() && newData.child('pin').val() === root.child('events').child($code).child('pins').child($team).val()"
+            }
+          }
+        },
         "bids": {
+          ".read": "auth != null && root.child('events').child($code).child('owner').val() === auth.uid",
           "$win": {
             "$team": {
-              ".write": "!data.exists() && root.child('events').child($code).child('status').child('bidding').child('id').val() === $win && root.child('events').child($code).child('status').child('bidding').child('open').val() === true",
+              ".write": "!data.exists() && root.child('events').child($code).child('status').child('bidding').child('id').val() === $win && root.child('events').child($code).child('status').child('bidding').child('open').val() === true && (!root.child('events').child($code).child('pins').child($team).exists() || newData.child('pin').val() === root.child('events').child($code).child('pins').child($team).val())",
               ".validate": "newData.hasChildren(['amount', 'at']) && newData.child('amount').isNumber() && newData.child('amount').val() > 0 && newData.child('at').val() === now && root.child('events').child($code).child('teams').child($team).exists()"
             }
           }

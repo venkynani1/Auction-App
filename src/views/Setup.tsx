@@ -26,6 +26,62 @@ const LINK_TEXT: Record<PublishState, [string, string]> = {
   error: ['Could not reach Firebase. Check the internet and the Firebase settings.', 'text-live'],
 };
 
+function printPinSlips(state: ReturnType<typeof useStore>['state'], url: string) {
+  const esc = (x: string) => x.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
+  const slips = state.teams.map((t, i) => `<div class="slip"><div class="ev">${esc(state.settings.eventName)}</div><div class="nm">${esc(t.name)}</div>
+    <div class="row"><div><span>TEAM NO.</span><b>${i + 1}</b></div><div><span>PIN</span><b>${t.pin}</b></div></div><div class="u">Scan the QR on the big screen, or open ${esc(url)}</div></div>`).join('');
+  const w = window.open('', '_blank');
+  if (!w) return false;
+  w.document.write(`<!doctype html><meta charset="utf-8"><title>Team PINs</title><style>
+    body{font-family:system-ui,sans-serif;margin:12mm;color:#111} .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6mm}
+    .slip{border:1.5px dashed #888;border-radius:8px;padding:5mm;break-inside:avoid} .ev{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:#666}
+    .nm{font-size:18px;font-weight:800;margin:2px 0 6px} .row{display:flex;gap:8mm} .row span{display:block;font-size:9px;letter-spacing:.15em;color:#666}
+    .row b{font-size:28px;letter-spacing:.08em} .u{margin-top:4px;font-size:9px;color:#666;word-break:break-all}
+  </style><div class="grid">${slips}</div><script>window.onload=()=>window.print()<\/script>`);
+  w.document.close();
+  return true;
+}
+
+function TeamPins({ url }: { url: string }) {
+  const { state, dispatch } = useStore();
+  const [show, setShow] = useState(false);
+  const on = state.settings.teamPins;
+  const list = state.teams.map((t, i) => `${i + 1}. ${t.name}: ${t.pin}`).join('\n');
+  return (
+    <div className="mt-6 rounded-2xl border border-line bg-panel-2/40 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <Label>Team PINs</Label>
+          <p className="text-sm text-muted">{on ? 'Phones need the team number and a 4-digit PIN to join a room and to bid, so no one can bid for another team.' : 'Off: anyone who scans the QR can join any team number.'}</p>
+        </div>
+        <Btn size="sm" variant={on ? 'ok' : 'subtle'} onClick={() => dispatch({ type: 'SETTINGS', patch: { teamPins: !on } })}>{on ? '✓ PINs on' : 'PINs off'}</Btn>
+      </div>
+      {on && (
+        <>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Btn size="sm" variant="gold" onClick={() => { if (!printPinSlips(state, url)) toast('Pop-ups are blocked. Allow pop-ups for this site, or use Copy PIN list.', 'warn'); }}>🖨 Print PIN slips</Btn>
+            <Btn size="sm" variant="outline" onClick={async () => toast((await copyText(list)) ? 'PIN list copied.' : 'Copy blocked here. Use Show PINs.', 'ok')}>Copy PIN list</Btn>
+            <Btn size="sm" variant="ghost" onClick={() => setShow((x) => !x)}>{show ? 'Hide PINs' : 'Show PINs'}</Btn>
+            <Btn size="sm" variant="ghost" onClick={async () => { if (await confirmDialog('Make new PINs for every team?', 'Phones that already joined must enter the new PIN. Print or share the new list.', 'New PINs')) dispatch({ type: 'TEAM_PINS_NEW' }); }}>New PINs</Btn>
+          </div>
+          {show && (
+            <div className="mt-3 grid max-h-64 grid-cols-1 gap-1 overflow-auto text-sm scroll-thin sm:grid-cols-2 lg:grid-cols-3">
+              {state.teams.map((t, i) => (
+                <div key={t.id} className="flex items-center gap-2 rounded-lg bg-panel px-3 py-1.5">
+                  <span className="w-6 text-dim num">{i + 1}</span>
+                  <span className="min-w-0 flex-1 truncate" style={{ color: t.color }}>{t.name}</span>
+                  <b className="font-mono tracking-widest">{t.pin}</b>
+                  <button className="text-xs text-dim hover:text-fg" title="New PIN for this team" onClick={() => dispatch({ type: 'TEAM_PINS_NEW', id: t.id })}>↻</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function RoomsSection({ roomLink }: { roomLink: PublishState }) {
   const { state, dispatch } = useStore();
   const code = state.rooms.code;
@@ -62,6 +118,7 @@ function RoomsSection({ roomLink }: { roomLink: PublishState }) {
           <p className="text-xs text-dim">Opening the rooms puts the QR code on the projector (Console → Projector shows → Room QR). Keep this laptop online during the auction.</p>
         </div>
       </div>
+      <TeamPins url={url} />
     </Section>
   );
 }

@@ -217,7 +217,7 @@ function JoinStage({ state }: { state: State }) {
         <h1 className="font-[family-name:var(--font-display)] font-black uppercase leading-[.88] text-[clamp(48px,7vw,140px)]">Scan to join<br />your team</h1>
         <ol className="mt-4 flex flex-col gap-1 text-[clamp(18px,1.9vw,34px)] text-fg/85">
           <li>1 · Scan the QR code with your phone camera</li>
-          <li>2 · Type your team number (1 – {state.teams.length})</li>
+          <li>2 · Type your team number (1 – {state.teams.length}){state.settings.teamPins ? ' and PIN' : ''}</li>
           <li>3 · Watch your purse, points and players live</li>
         </ol>
         <div className="mt-4 break-all font-[family-name:var(--font-cond)] text-[clamp(14px,1.3vw,24px)] tracking-wide text-muted">{url}</div>

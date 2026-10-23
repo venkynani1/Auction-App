@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { roomsConfigured, subscribe } from './rooms';
+import { roomsConfigured, subscribeAsHost } from './rooms';
 import { toBids, type Bid, type RawBid } from './bids';
 import type { State } from '../store';
 
@@ -14,7 +14,7 @@ export function useTeamBids(state: State): { bids: Bid[]; error: boolean } {
     if (!roomsConfigured || !win) return;
     let off = () => {};
     let alive = true;
-    subscribe<Record<string, RawBid>>(`events/${code}/bids/${win}`, (v) => alive && setRaw(v), () => alive && setError(true))
+    subscribeAsHost<Record<string, RawBid>>(`events/${code}/bids/${win}`, (v) => alive && setRaw(v), () => alive && setError(true))
       .then((u) => { if (alive) off = u; else u(); }).catch(() => alive && setError(true));
     return () => { alive = false; off(); };
   }, [code, win]);

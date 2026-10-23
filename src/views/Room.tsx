@@ -1,7 +1,6 @@
 // Participant side: opened on phones from the QR code. No local game state, everything comes from Firebase.
 import { useEffect, useState } from 'react';
-import { roomsConfigured, submitBid, subscribe, type RoomStatus, type RoomTeam } from '../lib/rooms';
-import type { RawBid } from '../lib/bids';
+import { checkPin, roomsConfigured, submitBid, subscribe, type RoomStatus, type RoomTeam } from '../lib/rooms';
 import { money, MONEY, pad2 } from '../lib/util';
 import { Wordmark } from '../components/Brand';
 import { Btn, cx, TeamDot } from '../components/ui';
@@ -9,6 +8,23 @@ import { Btn, cx, TeamDot } from '../components/ui';
 const ROUND_COLORS = ['#FF6A3D', '#2FD58A', '#A07BFF', '#FF4FA3'];
 const ROUND_SHORT = ['Actors', 'Cricketers', 'Music', 'Mystery'];
 const SAVED = (code: string) => `bidwars-room:${code}`;
+const MYBID = (code: string, win: string, no: number) => `bidwars-bid:${code}:${win}:${no}`;
+
+/** This phone's team (and PIN) for a room code. Older saves held just the team number. */
+interface Saved { team: number; pin: string }
+function readSaved(code: string): Saved | null {
+  try {
+    const raw = localStorage.getItem(SAVED(code));
+    if (!raw) return null;
+    const v = JSON.parse(raw) as unknown;
+    if (typeof v === 'number') return { team: v, pin: '' };
+    const o = v as Saved;
+    return o && typeof o.team === 'number' ? { team: o.team, pin: String(o.pin ?? '') } : null;
+  } catch { return null; }
+}
+const writeSaved = (code: string, v: Saved | null) => {
+  try { if (v) localStorage.setItem(SAVED(code), JSON.stringify(v)); else localStorage.removeItem(SAVED(code)); } catch { /* ignore */ }
+};
 
 export function parseRoomHash(hash: string): { code: string; team: number | null } | null {
   const m = /^#join\/([A-Z0-9]{4,12})(?:\/(\d{1,3}))?$/i.exec(hash);
@@ -26,11 +42,30 @@ export function RoomApp({ code, team }: { code: string; team: number | null }) {
     return () => off();
   }, [code]);
 
-  // Remember the team on this phone so a refresh or re-scan goes straight back in.
+  const [saved, setSaved] = useState<Saved | null>(() => readSaved(code));
+  const [pinOk, setPinOk] = useState<'checking' | 'ok' | 'wrong'>('checking');
+  const needPin = !!status?.pinRequired;
+  const savedPin = saved && saved.team === team ? saved.pin : '';
+
+  // A re-scan of the plain QR code goes straight back into this phone's team room.
   useEffect(() => {
-    if (team) { try { localStorage.setItem(SAVED(code), String(team)); } catch { /* ignore */ } return; }
-    try { const t = localStorage.getItem(SAVED(code)); if (t && status && Number(t) <= status.teamCount && status.phase !== 'closed') location.hash = `join/${code}/${t}`; } catch { /* ignore */ }
-  }, [code, team, status]);
+    if (team || !saved || !status || status.phase === 'closed' || saved.team > status.teamCount) return;
+    if (status.pinRequired && !saved.pin) return;
+    location.hash = `join/${code}/${saved.team}`;
+  }, [code, team, saved, status]);
+
+  // Re-check a remembered PIN once (the organiser may have made new PINs).
+  useEffect(() => {
+    if (!team || !needPin) return;
+    if (!savedPin) { setPinOk('wrong'); return; }
+    let alive = true;
+    setPinOk('checking');
+    checkPin(code, team, savedPin).then((r) => { if (alive) setPinOk(r === 'wrong' ? 'wrong' : 'ok'); });
+    return () => { alive = false; };
+  }, [code, team, needPin, savedPin]);
+
+  const join = (no: number, pin: string) => { const v = { team: no, pin }; writeSaved(code, v); setSaved(v); setPinOk('ok'); location.hash = `join/${code}/${no}`; };
+  const leave = () => { writeSaved(code, null); setSaved(null); location.hash = `join/${code}`; };
 
   let body: React.ReactNode;
   if (!roomsConfigured) body = <Notice title="Rooms are not set up" text="The organiser still needs to connect the app to Firebase." />;
@@ -38,8 +73,10 @@ export function RoomApp({ code, team }: { code: string; team: number | null }) {
   else if (status === undefined) body = <Notice title="Connecting…" text="" spin />;
   else if (status === null) body = <Notice title="Room not found" text={`There is no auction with the code ${code}. Scan the QR code on the screen again.`} />;
   else if (status.phase === 'closed') body = <Notice title="Rooms are closed" text="The organiser hasn't opened the team rooms yet. Keep this page open; it updates by itself." />;
-  else if (!team || team > status.teamCount) body = <JoinForm code={code} status={status} bad={!!team} />;
-  else body = <TeamRoom code={code} no={team} status={status} />;
+  else if (!team || team > status.teamCount) body = <JoinForm code={code} status={status} bad={!!team} onJoin={join} />;
+  else if (needPin && pinOk === 'wrong') body = <JoinForm code={code} status={status} bad={false} onJoin={join} team={team} pinChanged={!!savedPin} />;
+  else if (needPin && pinOk === 'checking') body = <Notice title="Checking your PIN…" text="" spin />;
+  else body = <TeamRoom code={code} no={team} pin={savedPin} status={status} onLeave={leave} />;
 
   return (
     <div className="stage-bg min-h-screen">
@@ -62,24 +99,51 @@ function Notice({ title, text, spin }: { title: string; text: string; spin?: boo
   );
 }
 
-function JoinForm({ code, status, bad }: { code: string; status: RoomStatus; bad: boolean }) {
-  const [v, setV] = useState('');
+function JoinForm({ code, status, bad, onJoin, team, pinChanged }: { code: string; status: RoomStatus; bad: boolean; onJoin: (no: number, pin: string) => void; team?: number; pinChanged?: boolean }) {
+  const [v, setV] = useState(team ? String(team) : '');
+  const [pin, setPin] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(pinChanged ? 'Your team PIN has changed. Ask the organiser for the new one.' : '');
   const n = Number(v);
   const ok = Number.isInteger(n) && n >= 1 && n <= status.teamCount;
+  const needPin = status.pinRequired;
+  const pinOk = !needPin || /^\d{4}$/.test(pin);
+  const submit = async () => {
+    if (!ok || !pinOk || busy) return;
+    if (!needPin) return onJoin(n, '');
+    setBusy(true); setErr('');
+    const r = await checkPin(code, n, pin);
+    setBusy(false);
+    if (r === 'ok') onJoin(n, pin);
+    else setErr(r === 'wrong' ? `That PIN is not right for team ${n}.` : 'No connection. Check your internet and try again.');
+  };
   return (
-    <form className="panel mt-6 p-6" onSubmit={(e) => { e.preventDefault(); if (ok) location.hash = `join/${code}/${n}`; }}>
+    <form className="panel mt-6 p-6" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <div className="label">Join your team room</div>
-      <h1 className="mt-1 font-[family-name:var(--font-display)] text-4xl font-black uppercase leading-none">What's your team number?</h1>
-      <p className="mt-2 text-sm text-muted">Use the number the organiser gave your team (1 to {status.teamCount}).</p>
-      <input id="room-no" autoFocus inputMode="numeric" pattern="[0-9]*" className="field mt-5 !h-20 text-center font-[family-name:var(--font-display)] !text-5xl font-black num"
-        placeholder="#" value={v} onChange={(e) => setV(e.target.value.replace(/\D/g, '').slice(0, 3))} />
+      <h1 className="mt-1 font-[family-name:var(--font-display)] text-4xl font-black uppercase leading-none">{team ? `Team ${team}: enter your PIN` : "What's your team number?"}</h1>
+      <p className="mt-2 text-sm text-muted">{needPin ? 'Use the team number and 4-digit PIN the organiser gave your team.' : `Use the number the organiser gave your team (1 to ${status.teamCount}).`}</p>
+      <div className={cx('mt-5 grid gap-3', needPin && 'grid-cols-2')}>
+        <label className="block">
+          {needPin && <span className="label">Team no.</span>}
+          <input id="room-no" autoFocus={!team} inputMode="numeric" pattern="[0-9]*" className="field !h-20 text-center font-[family-name:var(--font-display)] !text-5xl font-black num"
+            placeholder="#" value={v} onChange={(e) => setV(e.target.value.replace(/\D/g, '').slice(0, 3))} />
+        </label>
+        {needPin && (
+          <label className="block">
+            <span className="label">PIN</span>
+            <input id="room-pin" autoFocus={!!team} inputMode="numeric" pattern="[0-9]*" autoComplete="one-time-code" className="field !h-20 text-center font-[family-name:var(--font-display)] !text-5xl font-black tracking-[.2em] num"
+              placeholder="••••" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))} />
+          </label>
+        )}
+      </div>
       {(bad || (v && !ok)) && <p className="mt-2 text-sm text-live">Team numbers go from 1 to {status.teamCount}.</p>}
-      <Btn variant="gold" size="lg" className="mt-4 w-full" disabled={!ok}>Enter room ▶</Btn>
+      {err && <p className="mt-2 text-sm text-live">{err}</p>}
+      <Btn variant="gold" size="lg" className="mt-4 w-full" disabled={!ok || !pinOk || busy}>{busy ? 'Checking…' : 'Enter room ▶'}</Btn>
     </form>
   );
 }
 
-function TeamRoom({ code, no, status }: { code: string; no: number; status: RoomStatus }) {
+function TeamRoom({ code, no, pin, status, onLeave }: { code: string; no: number; pin: string; status: RoomStatus; onLeave: () => void }) {
   const [t, setT] = useState<RoomTeam | null | undefined>(undefined);
   useEffect(() => {
     let off = () => {};
@@ -95,7 +159,6 @@ function TeamRoom({ code, no, status }: { code: string; no: number; status: Room
   const bonuses = t.bonuses ?? [];
   const final = status.phase === 'final';
   const hiddenPts = !final && players.some((p) => p.pts == null && p.round === 3);
-  const leave = () => { try { localStorage.removeItem(SAVED(code)); } catch { /* */ } location.hash = `join/${code}`; };
 
   return (
     <div className="flex flex-col gap-4">
@@ -105,11 +168,11 @@ function TeamRoom({ code, no, status }: { code: string; no: number; status: Room
           <div className="label">Your team</div>
           <h1 className="truncate font-[family-name:var(--font-display)] text-3xl font-black uppercase leading-none" style={{ color: t.color }}>{t.name}</h1>
         </div>
-        <button onClick={leave} className="text-xs text-dim underline">Not you?</button>
+        <button onClick={onLeave} className="text-xs text-dim underline">Not you?</button>
       </div>
 
       <StatusCard status={status} myNo={no} />
-      {status.bidding && <BidCard code={code} no={no} team={t} bidding={status.bidding} />}
+      {status.bidding && <BidCard code={code} no={no} pin={pin} team={t} bidding={status.bidding} />}
 
       <div className="grid grid-cols-2 gap-2">
         <Stat k="Purse left" v={money(t.purse)} sub={`of ${money(t.startPurse + bonuses.reduce((a, b) => a + b.cash, 0))}`} gold />
@@ -162,19 +225,19 @@ function TeamRoom({ code, no, status }: { code: string; no: number; status: Room
   );
 }
 
-function BidCard({ code, no, team, bidding }: { code: string; no: number; team: RoomTeam; bidding: NonNullable<RoomStatus['bidding']> }) {
-  const [mine, setMine] = useState<RawBid | null | undefined>(undefined);
+function BidCard({ code, no, pin, team, bidding }: { code: string; no: number; pin: string; team: RoomTeam; bidding: NonNullable<RoomStatus['bidding']> }) {
+  const key = MYBID(code, bidding.id, no);
+  const [myAmount, setMyAmount] = useState<number | null>(() => { try { const x = localStorage.getItem(key); return x ? Number(x) : null; } catch { return null; } });
   const [editing, setEditing] = useState(false);
   const [v, setV] = useState('');
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState('');
   useEffect(() => {
-    let off = () => {};
-    let alive = true;
-    setMine(undefined); setEditing(false); setV(''); setErr('');
-    subscribe<RawBid>(`events/${code}/bids/${bidding.id}/${no}`, (x) => alive && setMine(x)).then((u) => { if (alive) off = u; else u(); }).catch(() => alive && setMine(null));
-    return () => { alive = false; off(); };
-  }, [code, no, bidding.id]);
+    setEditing(false); setV(''); setErr('');
+    try { const x = localStorage.getItem(key); setMyAmount(x ? Number(x) : null); } catch { setMyAmount(null); }
+  }, [key]);
+  // Bids are private until the organiser shows them; the host only tells us whether our team has bid.
+  const teamHasBid = team.bidWin === bidding.id || myAmount != null;
 
   const amount = Number(v);
   const valid = v !== '' && amount > 0 && Number.isFinite(amount);
@@ -182,8 +245,12 @@ function BidCard({ code, no, team, bidding }: { code: string; no: number; team: 
   const send = async () => {
     if (!valid || tooMuch || sending) return;
     setSending(true); setErr('');
-    try { await submitBid(code, bidding.id, no, Math.round(amount * 100) / 100, team.name); setEditing(false); }
-    catch { setErr('Your bid did not go through. Bidding may have closed.'); }
+    const amt = Math.round(amount * 100) / 100;
+    try {
+      await submitBid(code, bidding.id, no, amt, team.name, pin);
+      try { localStorage.setItem(key, String(amt)); } catch { /* ignore */ }
+      setMyAmount(amt); setEditing(false);
+    } catch { setErr('Bid not accepted. Bidding may have closed, someone in your team may have bid already, or the PIN has changed.'); }
     finally { setSending(false); }
   };
 
@@ -197,12 +264,11 @@ function BidCard({ code, no, team, bidding }: { code: string; no: number; team: 
     </div>
   );
 
-  if (mine === undefined) return shell(<p className="text-muted">Loading…</p>);
-  if (mine) {
+  if (teamHasBid) {
     return shell(
       <div className="text-center">
-        <div className="label">Your bid is in ✓</div>
-        <div className="font-[family-name:var(--font-display)] text-5xl font-black gold-text num">{MONEY(mine.amount)}</div>
+        <div className="label">Your team's bid is in ✓</div>
+        {myAmount != null ? <div className="font-[family-name:var(--font-display)] text-5xl font-black gold-text num">{MONEY(myAmount)}</div> : <div className="text-sm text-muted">Placed from a teammate's phone.</div>}
         <div className="mt-1 text-xs text-dim">One bid per team. Watch the big screen for the result.</div>
       </div>,
     );

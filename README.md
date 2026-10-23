@@ -54,6 +54,14 @@ Data stays in that browser. Use **Save backup with photos** to move everything t
 - After the final calculation the phone shows the final points; the team's position appears once the champion is revealed on the projector.
 - The auction laptop must be online. Rooms need the one-time Firebase setup below.
 
+### Team PINs
+
+- Every team has a 4-digit PIN (Setup → Team rooms → **Team PINs**). Phones enter the team number **and** the PIN to join, and the PIN is checked again on every bid,
+  so nobody can bid for another team. The database itself rejects a wrong PIN, and PINs can never be read from a phone.
+- **Print PIN slips** prints one slip per team (team name, number, PIN). **Copy PIN list** copies them as text. **New PINs** (all, or ↻ for one team) asks phones to enter the new PIN.
+- Bids are hidden from phones; only the auction laptop can see them until you show them on the projector.
+- Turn **PINs off** to go back to number-only joining.
+
 ### Team bids from phones
 
 - In **Console → Team bids**, press **Open team bids** (works during a lot or on its own). Every phone gets a **BID** button.

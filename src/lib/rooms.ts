@@ -4,7 +4,9 @@
 // Database layout:  events/<CODE>/owner          uid of the host laptop (anonymous sign-in)
 //                   events/<CODE>/status         round, current lot, open/closed …
 //                   events/<CODE>/teams/<no>     one node per team (1-based team number)
-//                   events/<CODE>/bids/<win>/<no> one bid per team per bidding window (written by phones)
+//                   events/<CODE>/bids/<win>/<no> one bid per team per bidding window (written by phones, read by host only)
+//                   events/<CODE>/pins/<no>      team PINs (never readable; the rules compare against them)
+//                   events/<CODE>/pinCheck/<no>/<device>  phones prove they know the PIN when joining
 import type { FirebaseApp } from 'firebase/app';
 import type { Database } from 'firebase/database';
 import { ROUNDS, SLIPS, teamRows, type State } from '../store';
@@ -35,6 +37,7 @@ export interface RoomStatus {
   };
   reveal: number;          // finale step on the projector (0–3)
   bidding: null | { id: string; open: boolean; lot: string | null; base: number | null };
+  pinRequired: boolean;
   updatedAt: number;
 }
 
@@ -45,6 +48,8 @@ export interface RoomTeam {
   points: number; pursePts: number; final: number; rank: number | null;
   players: RoomPlayer[];
   bonuses: { label: string; pts: number; cash: number }[];
+  /** Id of the bidding window this team has already bid in (no amount, so other teams can't peek). */
+  bidWin: string | null;
 }
 
 export function buildStatus(s: State): RoomStatus {
@@ -73,6 +78,7 @@ export function buildStatus(s: State): RoomStatus {
       state: s.live.phase,
     } : null,
     reveal: s.finalized ? s.finaleStep : 0,
+    pinRequired: s.settings.teamPins,
     bidding: s.bids ? (() => {
       const lot = s.bids.itemId ? s.items.find((i) => i.id === s.bids!.itemId) : undefined;
       return { id: s.bids.id, open: s.bids.open, lot: lot ? lot.name : null, base: lot ? lot.base : null };
@@ -88,7 +94,7 @@ function visiblePts(round: number, pts: number | null, finalized: boolean): numb
   return null; // round 3 secret, round 4 is a slip
 }
 
-export function buildTeams(s: State): Record<string, RoomTeam> {
+export function buildTeams(s: State, bidNos: ReadonlySet<number> = new Set()): Record<string, RoomTeam> {
   const rows = teamRows(s);
   const out: Record<string, RoomTeam> = {};
   rows.forEach((r) => {
@@ -107,6 +113,7 @@ export function buildTeams(s: State): Record<string, RoomTeam> {
         note: i.slip ? `${SLIPS[i.slip].title}: ${i.slipNote ?? ''}` : null,
       })),
       bonuses: s.adjs.filter((a) => a.teamId === r.team.id).map((a) => ({ label: a.label, pts: a.pts, cash: a.cash })),
+      bidWin: s.bids && bidNos.has(no) ? s.bids.id : null,
     };
   });
   return out;
@@ -130,6 +137,8 @@ async function signInHost() {
     const { app } = await fb();
     const { getAuth, signInAnonymously } = await import('firebase/auth');
     const auth = getAuth(app);
+    // Wait for a saved sign-in to load, so the projector window is the same "laptop" as the console window.
+    await auth.authStateReady();
     const cred = auth.currentUser ? { user: auth.currentUser } : await signInAnonymously(auth);
     return cred.user.uid;
   })().catch((e) => { hostUid = null; throw e; });
@@ -150,7 +159,7 @@ export async function claimRoom(code: string): Promise<boolean> {
 
 /** Write only the parts that changed since the last publish. */
 const last = new Map<string, string>();
-export async function publish(code: string, status: RoomStatus, teams: Record<string, RoomTeam>, removedTeams: string[] = []) {
+export async function publish(code: string, status: RoomStatus, teams: Record<string, RoomTeam>, removedTeams: string[] = [], pins: Record<string, string> | null = null) {
   const { db } = await fb();
   const { ref, update } = await import('firebase/database');
   const patch: Record<string, unknown> = {};
@@ -161,6 +170,7 @@ export async function publish(code: string, status: RoomStatus, teams: Record<st
     last.set(key, json);
     patch[path] = v;
   };
+  put('pins', pins);
   put('status', status);
   for (const [no, t] of Object.entries(teams)) put(`teams/${no}`, t);
   for (const no of removedTeams) { patch[`teams/${no}`] = null; last.delete(`${code}/teams/${no}`); }
@@ -175,10 +185,37 @@ export async function subscribe<T>(path: string, cb: (v: T | null) => void, onEr
 }
 
 /** Phone side: place this team's one bid. The server stamps the time, so "fastest" is fair across phones. */
-export async function submitBid(code: string, win: string, no: number, amount: number, name: string) {
+export async function submitBid(code: string, win: string, no: number, amount: number, name: string, pin: string) {
   const { db } = await fb();
   const { ref, set, serverTimestamp } = await import('firebase/database');
-  await set(ref(db, `events/${code}/bids/${win}/${no}`), { amount, at: serverTimestamp(), name });
+  await set(ref(db, `events/${code}/bids/${win}/${no}`), { amount, at: serverTimestamp(), name, pin });
+}
+
+const DEVICE_KEY = 'bidwars-device';
+function deviceId() {
+  try {
+    let id = localStorage.getItem(DEVICE_KEY);
+    if (!id) { id = Math.random().toString(36).slice(2, 12); localStorage.setItem(DEVICE_KEY, id); }
+    return id;
+  } catch { return Math.random().toString(36).slice(2, 12); }
+}
+
+/** Phone side: true if the PIN is right. The database rules accept this write only with the correct PIN. */
+export async function checkPin(code: string, no: number, pin: string): Promise<'ok' | 'wrong' | 'offline'> {
+  const { db } = await fb();
+  const { ref, set, serverTimestamp } = await import('firebase/database');
+  try {
+    await set(ref(db, `events/${code}/pinCheck/${no}/${deviceId()}`), { pin, at: serverTimestamp() });
+    return 'ok';
+  } catch (e) {
+    return /permission/i.test(String((e as { code?: string })?.code ?? e)) ? 'wrong' : 'offline';
+  }
+}
+
+/** Host side: subscribe after signing in, for nodes only the room owner may read (bids). */
+export async function subscribeAsHost<T>(path: string, cb: (v: T | null) => void, onError?: (e: Error) => void) {
+  await signInHost();
+  return subscribe(path, cb, onError);
 }
 
 export function joinUrl(code: string) {
