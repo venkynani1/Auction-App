@@ -11,6 +11,14 @@
         },
         "teams": {
           ".write": "auth != null && root.child('events').child($code).child('owner').val() === auth.uid"
+        },
+        "bids": {
+          "$win": {
+            "$team": {
+              ".write": "!data.exists() && root.child('events').child($code).child('status').child('bidding').child('id').val() === $win && root.child('events').child($code).child('status').child('bidding').child('open').val() === true",
+              ".validate": "newData.hasChildren(['amount', 'at']) && newData.child('amount').isNumber() && newData.child('amount').val() > 0 && newData.child('at').val() === now && root.child('events').child($code).child('teams').child($team).exists()"
+            }
+          }
         }
       }
     }

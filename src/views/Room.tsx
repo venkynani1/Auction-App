@@ -1,6 +1,7 @@
 // Participant side: opened on phones from the QR code. No local game state, everything comes from Firebase.
 import { useEffect, useState } from 'react';
-import { roomsConfigured, subscribe, type RoomStatus, type RoomTeam } from '../lib/rooms';
+import { roomsConfigured, submitBid, subscribe, type RoomStatus, type RoomTeam } from '../lib/rooms';
+import type { RawBid } from '../lib/bids';
 import { money, MONEY, pad2 } from '../lib/util';
 import { Wordmark } from '../components/Brand';
 import { Btn, cx, TeamDot } from '../components/ui';
@@ -108,6 +109,7 @@ function TeamRoom({ code, no, status }: { code: string; no: number; status: Room
       </div>
 
       <StatusCard status={status} myNo={no} />
+      {status.bidding && <BidCard code={code} no={no} team={t} bidding={status.bidding} />}
 
       <div className="grid grid-cols-2 gap-2">
         <Stat k="Purse left" v={money(t.purse)} sub={`of ${money(t.startPurse + bonuses.reduce((a, b) => a + b.cash, 0))}`} gold />
@@ -157,6 +159,77 @@ function TeamRoom({ code, no, status }: { code: string; no: number; status: Room
       )}
       <p className="text-center text-xs text-dim">This page updates live. Keep it open.</p>
     </div>
+  );
+}
+
+function BidCard({ code, no, team, bidding }: { code: string; no: number; team: RoomTeam; bidding: NonNullable<RoomStatus['bidding']> }) {
+  const [mine, setMine] = useState<RawBid | null | undefined>(undefined);
+  const [editing, setEditing] = useState(false);
+  const [v, setV] = useState('');
+  const [sending, setSending] = useState(false);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    let off = () => {};
+    let alive = true;
+    setMine(undefined); setEditing(false); setV(''); setErr('');
+    subscribe<RawBid>(`events/${code}/bids/${bidding.id}/${no}`, (x) => alive && setMine(x)).then((u) => { if (alive) off = u; else u(); }).catch(() => alive && setMine(null));
+    return () => { alive = false; off(); };
+  }, [code, no, bidding.id]);
+
+  const amount = Number(v);
+  const valid = v !== '' && amount > 0 && Number.isFinite(amount);
+  const tooMuch = valid && amount > team.purse + 1e-9;
+  const send = async () => {
+    if (!valid || tooMuch || sending) return;
+    setSending(true); setErr('');
+    try { await submitBid(code, bidding.id, no, Math.round(amount * 100) / 100, team.name); setEditing(false); }
+    catch { setErr('Your bid did not go through. Bidding may have closed.'); }
+    finally { setSending(false); }
+  };
+
+  const shell = (children: React.ReactNode) => (
+    <div className="panel overflow-hidden border-2" style={{ borderColor: 'var(--color-gold)' }}>
+      <div className="flex items-center justify-between bg-gold/15 px-4 py-2">
+        <span className="font-[family-name:var(--font-cond)] text-sm font-bold tracking-widest text-gold-2">TEAM BIDDING</span>
+        <span className={cx('text-xs font-semibold', bidding.open ? 'text-ok' : 'text-muted')}>{bidding.open ? '● OPEN' : 'CLOSED'}</span>
+      </div>
+      <div className="p-4">{bidding.lot && <div className="mb-2 text-sm text-muted">For <b className="text-fg">{bidding.lot}</b>{bidding.base ? ` · base ${money(bidding.base)}` : ''}</div>}{children}</div>
+    </div>
+  );
+
+  if (mine === undefined) return shell(<p className="text-muted">Loading…</p>);
+  if (mine) {
+    return shell(
+      <div className="text-center">
+        <div className="label">Your bid is in ✓</div>
+        <div className="font-[family-name:var(--font-display)] text-5xl font-black gold-text num">{MONEY(mine.amount)}</div>
+        <div className="mt-1 text-xs text-dim">One bid per team. Watch the big screen for the result.</div>
+      </div>,
+    );
+  }
+  if (!bidding.open) return shell(<p className="text-center text-muted">Bidding has closed. Your team did not bid.</p>);
+  if (!editing) {
+    return shell(
+      <Btn variant="gold" size="xl" className="w-full animate-glow" style={{ ['--glow' as string]: 'var(--color-gold)' }} onClick={() => setEditing(true)}>BID 🔨</Btn>,
+    );
+  }
+  return shell(
+    <form onSubmit={(e) => { e.preventDefault(); void send(); }}>
+      <label className="label" htmlFor="bid-amt">Your bid in crores (50 L = 0.5)</label>
+      <div className="mt-1 flex items-center gap-2">
+        <span className="font-[family-name:var(--font-display)] text-4xl font-black text-gold-2">₹</span>
+        <input id="bid-amt" autoFocus inputMode="decimal" className="field !h-16 flex-1 font-[family-name:var(--font-display)] !text-4xl font-black num"
+          placeholder="0.0" value={v} onChange={(e) => setV(e.target.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1').slice(0, 7))} />
+        <span className="font-[family-name:var(--font-display)] text-2xl font-black text-muted">Cr</span>
+      </div>
+      <div className="mt-1 min-h-5 text-sm">{tooMuch ? <span className="text-live">You only have {money(team.purse)} left.</span> : valid ? <span className="text-muted">= {money(amount)} · you have {money(team.purse)}</span> : <span className="text-dim">You have {money(team.purse)} left.</span>}</div>
+      {err && <p className="text-sm text-live">{err}</p>}
+      <div className="mt-2 grid grid-cols-[1fr_2fr] gap-2">
+        <Btn type="button" variant="ghost" size="lg" onClick={() => { setEditing(false); setV(''); }}>Cancel</Btn>
+        <Btn variant="gold" size="lg" disabled={!valid || tooMuch || sending}>{sending ? 'Sending…' : 'Confirm bid'}</Btn>
+      </div>
+      <p className="mt-2 text-xs text-dim">You can bid only once. It can't be changed after you confirm.</p>
+    </form>,
   );
 }
 
