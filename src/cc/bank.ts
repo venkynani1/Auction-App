@@ -151,9 +151,10 @@ export const DEFAULT_BANK: Question[] = ROWS.map(([id, group, category, difficul
 /** Default 19-lot plan (question ids per lot). Changing it here only affects new events. */
 export const DEFAULT_PLAN = {
   practice: 'p02',
-  r1: [['t02', 50, 100, 'open'], ['m01', 60, 120, 'open'], ['p03', 70, 150, 'open'], ['l06', 75, 130, 'exclusive'], ['e01', 65, 110, 'open']],
-  r2: [['c01', 75, 150, 'open'], ['s01', 80, 200, 'open'], ['s02', 90, 250, 'steal'], ['s03', 100, 180, 'open'], ['c10', 85, 220, 'exclusive']],
-  r3: [['m09', 100, 200, 'open'], ['p08', 120, 250, 'steal'], ['c23', 150, 350, 'open'], ['l09', 110, 300, 'exclusive'], ['e04', 130, 280, 'open']],
+  // 7 lots per round (~1.5 min each). Skip lots on the night if you fall behind schedule.
+  r1: [['t02', 50, 100, 'open'], ['m01', 60, 120, 'open'], ['t03', 55, 110, 'open'], ['p03', 70, 150, 'open'], ['m08', 65, 140, 'steal'], ['l06', 75, 130, 'exclusive'], ['e01', 65, 110, 'open']],
+  r2: [['c01', 75, 150, 'open'], ['s01', 80, 200, 'open'], ['c07', 90, 200, 'open'], ['s02', 90, 250, 'steal'], ['s03', 100, 180, 'open'], ['l03', 85, 210, 'steal'], ['c10', 85, 220, 'exclusive']],
+  r3: [['m09', 100, 200, 'open'], ['p08', 120, 250, 'steal'], ['m15', 120, 260, 'open'], ['c23', 150, 350, 'open'], ['l09', 110, 300, 'exclusive'], ['c13', 140, 320, 'steal'], ['e04', 130, 280, 'open']],
   vaults: [100, 120, 150, 130],
   vaultQuestion: 't07',
   jackpot: 'l11',

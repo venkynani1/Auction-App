@@ -31,7 +31,7 @@ export const DEFAULT_CONFIG: Config = {
   share: 0.2, stealShare: 0.5, conv: 50,
   board: 'always', sound: true, auto: false,
   practicePurse: 1000,
-  schedule: [5, 3, 10, 12, 12, 12, 6],
+  schedule: [4, 3, 11, 12, 12, 12, 6],
   crowdReward: 50, jackpotReward: 300,
   vaultPool: DEFAULT_VAULTS,
   regCode: '',
@@ -581,6 +581,36 @@ export function moveLot(s: HostState, lotId: string, dir: -1 | 1) {
     const a = lotOf(d, same[i]!.id), b = lotOf(d, same[j]!.id);
     [a.seq, b.seq] = [b.seq, a.seq];
   });
+}
+
+/** Add one more question lot at the end of round 1–3, with an unused question from a group the round has least of. */
+export function addLot(s: HostState, round: 1 | 2 | 3, rnd = Math.random) {
+  const inRound = s.lots.filter((l) => l.round === round && !l.practice && l.kind === 'question');
+  if (inRound.length >= 20) fail('A round can have at most 20 lots.');
+  const used = new Set(s.lots.filter((l) => l.questionId && l.status !== 'skipped').map((l) => l.questionId!));
+  const pool = s.bank.filter((q) => q.active && !used.has(q.id));
+  if (!pool.length) fail('Every active question is already used. Add or restore questions first.');
+  const groupCount = (g: string) => inRound.filter((l) => question(s, l.questionId)?.group === g).length;
+  const least = Math.min(...pool.map((q) => groupCount(q.group)));
+  const pick = shuffle(pool.filter((q) => groupCount(q.group) === least), rnd)[0]!;
+  const last = [...inRound].sort((a, b) => b.seq - a.seq)[0];
+  const seq = (last?.seq ?? 0) + 1;
+  const base = last?.base ?? [0, 60, 85, 120][round]!;
+  const reward = last?.reward ?? [0, 120, 200, 280][round]!;
+  const lot = lotFrom(pick, round, seq, base, reward, 'open');
+  return mut(s, (d) => { d.lots.push(lot); }, ['Lot added', `${lotLabel(lot)} round ${round}: ${pick.title}`]);
+}
+
+/** Delete a question lot that has not been played (to shorten a round). */
+export function removeLot(s: HostState, lotId: string) {
+  const l = findLot(s, lotId) ?? fail('Unknown lot.');
+  if (l.kind !== 'question' || l.practice) fail('Only normal question lots can be removed. Skip vaults instead.');
+  if (l.status !== 'pending' && l.status !== 'skipped') fail('This lot has already been played.');
+  if (l.owner !== null) fail('This lot has an owner.');
+  return mut(s, (d) => {
+    d.lots = d.lots.filter((x) => x.id !== lotId);
+    d.lots.filter((x) => x.round === l.round && x.kind === 'question' && !x.practice && x.seq > l.seq).forEach((x) => { x.seq -= 1; });
+  }, ['Lot removed', `${lotLabel(l)} round ${l.round}: ${l.title}`]);
 }
 
 /** Give every unplayed question lot a fresh, unused question from the active bank. */

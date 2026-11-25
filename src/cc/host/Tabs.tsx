@@ -116,7 +116,7 @@ export function LotsTab() {
   return (
     <div className="flex flex-col gap-4">
       <div className="panel flex flex-wrap items-center gap-3 p-4">
-        <p className="min-w-0 flex-1 text-sm text-muted">19 lots plus the final jackpot. Change questions, prices, rewards and how teams answer. Played lots are locked.</p>
+        <p className="min-w-0 flex-1 text-sm text-muted">{s.lots.filter((l) => !l.practice && l.kind === 'question' && l.status !== 'skipped').length} auction lots + 4 vaults + the final jackpot. Each lot takes about 1½ minutes; add or remove lots to fit your time. Played lots are locked.</p>
         <Btn variant="outline" onClick={async () => { if (await confirmDialog('Pick new random questions?', 'Every lot that has not been played gets a fresh, unused question.', 'Randomise', false)) act((x) => E.randomizeQuestions(x), 'Questions randomised.'); }}>🎲 Randomise questions</Btn>
       </div>
       {rounds.map((r) => {
@@ -127,6 +127,8 @@ export function LotsTab() {
             <div className="flex items-center gap-3 border-b border-line px-4 py-3" style={{ background: `linear-gradient(90deg, ${m.color}20, transparent)` }}>
               <h3 className="font-[family-name:var(--font-display)] text-xl font-bold uppercase" style={{ color: m.color }}>Round {r} · {m.name}</h3>
               <span className="text-sm text-muted">{s.cfg.schedule[r + 1]} min · {m.tag}</span>
+              {r < 4 && <span className="text-sm text-muted">· {lots.filter((l) => l.status !== 'skipped').length} lots</span>}
+              {r < 4 && <Btn size="xs" variant="outline" className="ml-auto" onClick={() => act((x) => E.addLot(x, r as 1 | 2 | 3), 'Lot added with an unused question.')}>＋ Add lot</Btn>}
               {r === 4 && <Btn size="xs" variant="ghost" className="ml-auto" onClick={() => { setPeek((x) => !x); if (!peek) act((x) => ({ ...x, audit: [{ at: Date.now(), action: 'Host viewed vault contents', detail: '' }, ...x.audit], rev: x.rev + 1 })); }}>{peek ? 'Hide' : 'Peek at'} vault contents</Btn>}
             </div>
             <table className="w-full min-w-[980px] text-sm">
@@ -174,6 +176,7 @@ function LotRow({ l, s, used, active, peek }: { l: Lot; s: HostState; used: Map<
           {l.kind !== 'jackpot' && <><Btn size="xs" variant="ghost" disabled={locked} onClick={() => act((x) => E.moveLot(x, l.id, -1))} aria-label="Move up">↑</Btn><Btn size="xs" variant="ghost" disabled={locked} onClick={() => act((x) => E.moveLot(x, l.id, 1))} aria-label="Move down">↓</Btn></>}
           {l.status === 'pending' && l.kind !== 'jackpot' && <Btn size="xs" variant="ghost" onClick={() => act((x) => E.skipLot(x, l.id))}>Skip</Btn>}
           {l.status === 'skipped' && l.owner === null && <Btn size="xs" variant="ghost" onClick={() => act((x) => E.unskipLot(x, l.id))}>Restore</Btn>}
+          {l.kind === 'question' && (l.status === 'pending' || l.status === 'skipped') && l.owner === null && <Btn size="xs" variant="ghost" className="hover:!text-live" onClick={async () => { if (await confirmDialog(`Remove ${E.lotLabel(l)}?`, 'The lot is deleted and its question goes back to the bank.', 'Remove')) act((x) => E.removeLot(x, l.id)); }}>Remove</Btn>}
         </div>
       </td>
       <td className="hidden">{s.rev}</td>

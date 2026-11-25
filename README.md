@@ -125,6 +125,7 @@ Needs the Firebase setup above (same project, same environment variables). **Pas
 - OPEN: everyone answers, the owner gets full points, other correct teams 20%. EXCLUSIVE: only the owner answers. STEAL: if the owner misses, a second 10-second window opens for everyone else (50%). Unsold lots can become a free crowd question.
 - Answer windows are timed by the Firebase server: answers after the deadline are refused, and each team can answer once.
 - Final points = points + 50 per full ₹1 Cr left (settings).
+- 7 lots per round by default (about 1½ minutes each). **Lots → ＋ Add lot / Remove** changes the count; **Skip** on the night if you fall behind.
 - Everything is changeable under **Lots** (question, base price, reward, OPEN/EXCLUSIVE/STEAL, physical/phone bidding, order, skip), **Questions** (120 built-in questions; add, edit, archive, import/export JSON or CSV) and **Settings**.
 - **Void & replay** for technical problems, **± Points / cash** for manual fixes. Every change is in the **audit log**; **Export results (CSV)** at the end.
 - The game saves itself after every action (this browser + Firebase). Reloading the host page or opening it on the same laptop continues where you left off.
