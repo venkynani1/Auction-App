@@ -34,6 +34,88 @@
           }
         }
       }
+    },
+    "cc": {
+      "$code": {
+        "owner": {
+          ".read": true,
+          ".write": "auth != null && (!data.exists() || data.val() === auth.uid)"
+        },
+        "pub": {
+          ".read": true,
+          ".write": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid"
+        },
+        "allowed": {
+          ".read": true,
+          ".write": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid"
+        },
+        "regcode": {
+          ".write": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid"
+        },
+        "host": {
+          ".read": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          ".write": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid"
+        },
+        "pins": {
+          ".write": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          "$team": {
+            ".write": "!data.exists() && newData.exists() && root.child('cc').child($code).child('pub').child('regOpen').val() === true && root.child('cc').child($code).child('allowed').child($team).val() === true && newData.parent().parent().child('reg').child($team).exists()",
+            ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4,6}$/)"
+          }
+        },
+        "reg": {
+          ".read": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          ".write": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          "$team": {
+            ".read": "(auth != null && root.child('cc').child($code).child('owner').val() === auth.uid) || (auth != null && root.child('cc').child($code).child('sess').child($team).child('uid').val() === auth.uid)",
+            ".write": "!data.exists() && newData.exists() && auth != null && newData.child('uid').val() === auth.uid && root.child('cc').child($code).child('pub').child('regOpen').val() === true && root.child('cc').child($code).child('allowed').child($team).val() === true && newData.parent().parent().child('pins').child($team).exists() && (!root.child('cc').child($code).child('regcode').exists() || newData.child('code').val() === root.child('cc').child($code).child('regcode').val())",
+            ".validate": "newData.hasChildren(['m', 'at', 'uid']) && newData.child('at').val() === now && newData.child('m').child('0').isString() && newData.child('m').child('1').isString() && newData.child('m').child('2').isString() && newData.child('m').child('3').isString() && newData.child('m').child('0').val().length > 0 && newData.child('m').child('1').val().length > 0 && newData.child('m').child('2').val().length > 0 && newData.child('m').child('3').val().length > 0 && newData.child('m').child('0').val().length <= 40 && newData.child('m').child('1').val().length <= 40 && newData.child('m').child('2').val().length <= 40 && newData.child('m').child('3').val().length <= 40 && !newData.child('m').child('4').exists()"
+          }
+        },
+        "sess": {
+          ".write": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          "$team": {
+            ".read": "(auth != null && root.child('cc').child($code).child('owner').val() === auth.uid) || (auth != null && data.child('uid').val() === auth.uid)",
+            ".write": "newData.exists() && auth != null && newData.child('uid').val() === auth.uid && newData.parent().parent().child('reg').child($team).exists() && newData.child('pin').val() === newData.parent().parent().child('pins').child($team).val()",
+            ".validate": "newData.hasChildren(['uid', 'pin', 'at']) && newData.child('at').val() === now"
+          }
+        },
+        "online": {
+          ".read": true,
+          "$team": {
+            ".write": "auth != null && root.child('cc').child($code).child('sess').child($team).child('uid').val() === auth.uid",
+            ".validate": "!newData.exists() || newData.val() === true"
+          }
+        },
+        "priv": {
+          ".write": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          "$team": {
+            ".read": "(auth != null && root.child('cc').child($code).child('owner').val() === auth.uid) || (auth != null && root.child('cc').child($code).child('sess').child($team).child('uid').val() === auth.uid)"
+          }
+        },
+        "bids": {
+          ".read": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          ".write": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          "$lot": {
+            "$team": {
+              "$bid": {
+                ".write": "!data.exists() && newData.exists() && auth != null && root.child('cc').child($code).child('sess').child($team).child('uid').val() === auth.uid && root.child('cc').child($code).child('pub').child('lot').child('id').val() === $lot && root.child('cc').child($code).child('pub').child('lot').child('status').val() === 'auction' && root.child('cc').child($code).child('pub').child('lot').child('mode').val() === 'mobile' && now <= root.child('cc').child($code).child('pub').child('lot').child('deadline').val()",
+                ".validate": "newData.hasChildren(['a', 'at']) && newData.child('at').val() === now && newData.child('a').isNumber() && newData.child('a').val() >= root.child('cc').child($code).child('pub').child('lot').child('minBid').val() && newData.child('a').val() <= root.child('cc').child($code).child('priv').child($team).child('purse').val() && (newData.child('a').val() % root.child('cc').child($code).child('pub').child('cfg').child('inc').val() === 0 || newData.child('a').val() === root.child('cc').child($code).child('pub').child('lot').child('base').val())"
+              }
+            }
+          }
+        },
+        "ans": {
+          ".read": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          ".write": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          "$win": {
+            "$team": {
+              ".write": "!data.exists() && newData.exists() && auth != null && root.child('cc').child($code).child('sess').child($team).child('uid').val() === auth.uid && root.child('cc').child($code).child('pub').child('q').child('win').val() === $win && now <= root.child('cc').child($code).child('pub').child('q').child('deadline').val() && (root.child('cc').child($code).child('pub').child('q').child('elig').val() === 'all' || (root.child('cc').child($code).child('pub').child('q').child('elig').val() === 'owner' && root.child('cc').child($code).child('pub').child('q').child('owner').val() + '' === $team) || (root.child('cc').child($code).child('pub').child('q').child('elig').val() === 'others' && root.child('cc').child($code).child('pub').child('q').child('owner').val() + '' !== $team))",
+              ".validate": "newData.hasChildren(['c', 'at']) && newData.child('at').val() === now && (newData.child('c').isNumber() || (newData.child('c').isString() && newData.child('c').val().length <= 60))"
+            }
+          }
+        }
+      }
     }
   }
 }

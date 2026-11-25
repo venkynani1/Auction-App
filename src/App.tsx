@@ -12,6 +12,11 @@ import { PlayersView } from './views/Players';
 import { SetupView } from './views/Setup';
 import { parseRoomHash, RoomApp } from './views/Room';
 import { useRoomPublisher } from './lib/useRoomPublisher';
+import { Landing } from './Landing';
+import { HostHome } from './cc/host/HostHome';
+import { HostApp } from './cc/host/Host';
+import { Screen } from './cc/Screen';
+import { Play } from './cc/Play';
 import { useTeamBids } from './lib/useBids';
 
 type Route = 'console' | 'projector' | 'show' | 'teams' | 'players' | 'setup';
@@ -46,6 +51,7 @@ function Shell() {
       {route !== 'show' && (
         <header className="sticky z-50 border-b border-line bg-ink/90 backdrop-blur" style={{ top: 'env(safe-area-inset-top, 0px)' }}>
           <div className="mx-auto flex min-h-14 max-w-[1680px] flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5">
+            <a href="#home" className="rounded-lg px-2 py-1 text-xs font-semibold text-muted hover:text-fg" title="Back to game selection">← Games</a>
             <a href="#console" aria-label="Home"><Wordmark name={state.settings.eventName} size="sm" /></a>
             <nav className="order-3 -mx-1 flex w-full gap-0.5 overflow-x-auto scroll-thin lg:order-none lg:w-auto lg:flex-1">
               {NAV.map(([r, l]) => (
@@ -74,10 +80,36 @@ function Shell() {
   );
 }
 
+type Top =
+  | { k: 'landing' } | { k: 'classic' } | { k: 'room'; code: string; team: number | null }
+  | { k: 'cc' } | { k: 'cc-host'; code: string } | { k: 'cc-screen'; code: string } | { k: 'cc-play'; code: string };
+
+function top(hash: string): Top {
+  const room = parseRoomHash(hash);
+  if (room) return { k: 'room', code: room.code, team: room.team };
+  const h = hash.replace(/^#\/?/, '');
+  const code = (x: string) => x.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  let m: RegExpExecArray | null;
+  if ((m = /^cc\/host\/([A-Za-z0-9]+)/.exec(h))) return { k: 'cc-host', code: code(m[1]!) };
+  if ((m = /^cc\/screen\/([A-Za-z0-9]+)/.exec(h))) return { k: 'cc-screen', code: code(m[1]!) };
+  if ((m = /^play\/([A-Za-z0-9]+)/.exec(h))) return { k: 'cc-play', code: code(m[1]!) };
+  if (h === 'cc' || h.startsWith('cc/')) return { k: 'cc' };
+  if ((ROUTES as string[]).includes(h)) return { k: 'classic' };
+  return { k: 'landing' };
+}
+
 export function App() {
-  // Phones that scanned the room QR get the participant view only, never the host's game.
-  const [room, setRoom] = useState(() => parseRoomHash(location.hash));
-  useEffect(() => { const on = () => setRoom(parseRoomHash(location.hash)); window.addEventListener('hashchange', on); return () => window.removeEventListener('hashchange', on); }, []);
-  if (room) return <RoomApp code={room.code} team={room.team} />;
-  return <StoreProvider><Shell /></StoreProvider>;
+  // The hash picks the game: Landing (no hash) → Classic (#console…) or Code & Chaos (#cc…, #play/CODE).
+  // Phones that scanned a QR get the participant view only, never the host's game.
+  const [t, setT] = useState(() => top(location.hash));
+  useEffect(() => { const on = () => setT(top(location.hash)); window.addEventListener('hashchange', on); return () => window.removeEventListener('hashchange', on); }, []);
+  switch (t.k) {
+    case 'landing': return <Landing />;
+    case 'room': return <RoomApp code={t.code} team={t.team} />;
+    case 'cc': return <div className="theme-cc"><HostHome /></div>;
+    case 'cc-host': return <div className="theme-cc"><HostApp key={t.code} code={t.code} /></div>;
+    case 'cc-screen': return <Screen key={t.code} code={t.code} />;
+    case 'cc-play': return <Play key={t.code} code={t.code} />;
+    default: return <StoreProvider><Shell /></StoreProvider>;
+  }
 }
