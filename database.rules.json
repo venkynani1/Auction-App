@@ -39,7 +39,7 @@
       "$code": {
         "owner": {
           ".read": true,
-          ".write": "auth != null && (!data.exists() || data.val() === auth.uid || (newData.val() === auth.uid && root.child('cc').child($code).child('handover').exists() && newData.parent().child('handoverTry').child(auth.uid).val() === root.child('cc').child($code).child('handover').val()))"
+          ".write": "auth != null && (!data.exists() || data.val() === auth.uid || (newData.val() === auth.uid && root.child('cc').child($code).child('handover').exists() && newData.parent().child('handoverTry').child(auth.uid).val() === root.child('cc').child($code).child('handover').val()) || (newData.val() === auth.uid && (auth != null && root.child('cc').child($code).child('cokey').exists() && root.child('cc').child($code).child('cohosts').child(auth.uid).val() === root.child('cc').child($code).child('cokey').val())))"
         },
         "handover": {
           ".write": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
@@ -50,6 +50,35 @@
           "$uid": {
             ".write": "auth != null && auth.uid === $uid",
             ".validate": "newData.isString() && newData.val().length <= 20"
+          }
+        },
+        "cokey": {
+          ".read": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          ".write": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length >= 8)"
+        },
+        "cohosts": {
+          ".read": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          ".write": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "auth != null && auth.uid === $uid && newData.val() === root.child('cc').child($code).child('cokey').val()"
+          }
+        },
+        "prop": {
+          ".read": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          ".write": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          "$uid": {
+            "$id": {
+              ".write": "auth != null && auth.uid === $uid && (auth != null && root.child('cc').child($code).child('cokey').exists() && root.child('cc').child($code).child('cohosts').child(auth.uid).val() === root.child('cc').child($code).child('cokey').val())",
+              ".validate": "newData.hasChildren(['base', 'state']) && newData.child('base').isNumber() && newData.child('state').isString()"
+            }
+          }
+        },
+        "propAck": {
+          ".write": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid"
           }
         },
         "pub": {
@@ -64,7 +93,7 @@
           ".write": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid"
         },
         "host": {
-          ".read": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          ".read": "(auth != null && root.child('cc').child($code).child('owner').val() === auth.uid) || (auth != null && root.child('cc').child($code).child('cokey').exists() && root.child('cc').child($code).child('cohosts').child(auth.uid).val() === root.child('cc').child($code).child('cokey').val())",
           ".write": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid"
         },
         "pins": {
@@ -105,7 +134,7 @@
           }
         },
         "bids": {
-          ".read": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          ".read": "(auth != null && root.child('cc').child($code).child('owner').val() === auth.uid) || (auth != null && root.child('cc').child($code).child('cokey').exists() && root.child('cc').child($code).child('cohosts').child(auth.uid).val() === root.child('cc').child($code).child('cokey').val())",
           ".write": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
           "$lot": {
             "$team": {
@@ -117,7 +146,7 @@
           }
         },
         "ans": {
-          ".read": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          ".read": "(auth != null && root.child('cc').child($code).child('owner').val() === auth.uid) || (auth != null && root.child('cc').child($code).child('cokey').exists() && root.child('cc').child($code).child('cohosts').child(auth.uid).val() === root.child('cc').child($code).child('cokey').val())",
           ".write": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
           "$win": {
             "$team": {

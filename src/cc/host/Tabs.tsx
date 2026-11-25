@@ -60,7 +60,7 @@ export function TeamsTab() {
                     {t.members && <Btn size="xs" variant="ghost" onClick={() => { setPinFor(t.no); setPin(''); }}>Reset PIN</Btn>}
                     {t.members && <Btn size="xs" variant="ghost" className="hover:!text-live" onClick={async () => {
                       if (!(await confirmDialog(`Clear Team ${t.no}'s registration?`, 'Names, PIN and the signed-in phone are removed so the team can register again. Purchases and points are kept.', 'Clear'))) return;
-                      try { await hostClearTeam(s.code, t.no); act((x) => E.editTeam(x, t.no, null), `Team ${t.no} can register again.`); } catch { toast('Could not reach Firebase.', 'warn'); }
+                      try { await hostClearTeam(s.code, t.no); act((x) => E.editTeam(x, t.no, null), `Team ${t.no} can register again.`); } catch { toast('Not done: only the main device can change PINs and registrations (or there is no connection).', 'warn'); }
                     }}>Clear</Btn>}
                   </div>
                 </td>
@@ -80,7 +80,7 @@ export function TeamsTab() {
         <div className="mt-4 flex justify-end gap-2">
           <Btn variant="ghost" onClick={() => setPin(String(Math.floor(1000 + Math.random() * 9000)))}>Random</Btn>
           <Btn variant="primary" disabled={!/^\d{4,6}$/.test(pin)} onClick={async () => {
-            try { await hostResetPin(s.code, pinFor!, pin); const no = pinFor!; act((x) => ({ ...x, rev: x.rev + 1, audit: [{ at: Date.now(), action: 'PIN reset', detail: `Team ${no}` }, ...x.audit] }), `Team ${no} PIN is now ${pin}.`); setPinFor(null); } catch { toast('Could not reach Firebase.', 'warn'); }
+            try { await hostResetPin(s.code, pinFor!, pin); const no = pinFor!; act((x) => ({ ...x, rev: x.rev + 1, audit: [{ at: Date.now(), action: 'PIN reset', detail: `Team ${no}` }, ...x.audit] }), `Team ${no} PIN is now ${pin}.`); setPinFor(null); } catch { toast('Not done: only the main device can change PINs and registrations (or there is no connection).', 'warn'); }
           }}>Set PIN</Btn>
         </div>
       </Modal>

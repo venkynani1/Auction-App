@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as E from '../engine';
 import type { HostState, Lot } from '../types';
-import { cancelHandover, hostLink, hostWrite, joinLink, serverNow, startHandover, useServerNow } from '../fb';
+import { coKey, hostLink, joinLink, serverNow, useServerNow } from '../fb';
 import { HostProvider, useHost } from './store';
 import { clock, CodeBlock, Countdown, Partic, QR, RoundChip, TeamBadge } from '../ui';
 import { Btn, confirmDialog, ConfirmHost, cx, Field, Label, Modal, toast, ToastHost } from '../../components/ui';
@@ -47,7 +47,7 @@ function HostShell() {
             )}
             <span className="text-xs text-muted" title="Team phones online">📱 {online.size}</span>
             <a className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-semibold hover:border-info" href={`#cc/screen/${s.code}`} target="_blank" rel="noreferrer">Projector ↗</a>
-            <PhoneControl />
+            <AddDevice />
             <Btn size="sm" variant="ghost" onClick={() => setMuted(!muted)} aria-label={muted ? 'Unmute' : 'Mute'}>{muted ? '🔇' : '🔊'}</Btn>
             <span className={cx('h-2.5 w-2.5 rounded-full', link === 'live' ? 'bg-ok' : 'bg-live animate-blink')} title={link === 'live' ? 'Connected' : 'Not connected'} />
           </div>
@@ -69,39 +69,42 @@ function HostShell() {
   );
 }
 
-/** Move control of the event to another device (e.g. the host's phone) by scanning a one-time QR code. */
-function PhoneControl() {
-  const { s } = useHost();
+/** Let a second person control the event from another phone or laptop at the same time. */
+function AddDevice() {
+  const { s, role, makeMain } = useHost();
   const [open, setOpen] = useState(false);
   const [key, setKey] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const begin = async () => {
-    setOpen(true); setBusy(true);
-    try {
-      await hostWrite(s.code, { host: JSON.stringify(s) }, true);   // the phone starts from the very latest state
-      setKey(await startHandover(s.code));
-    } catch { toast('Could not reach Firebase.', 'warn'); setOpen(false); }
-    setBusy(false);
+  if (role === 'co') {
+    return (
+      <>
+        <span className="rounded-lg bg-violet/20 px-2.5 py-1 text-xs font-bold text-[#c3b1ff]" title="Changes you make go to the main device, which runs the timers and scoring.">2nd CONTROLLER</span>
+        <button className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-semibold hover:border-info" onClick={async () => { if (await confirmDialog('Make this the main device?', 'Use this if the main device has stopped working. This device will run the timers and scoring, so keep it open with the screen on. The other device stays a controller.', 'Make main', false)) void makeMain(); }}>Make main</button>
+      </>
+    );
+  }
+  const show = async (rotate = false) => {
+    setOpen(true);
+    try { setKey(await coKey(s.code, rotate)); if (rotate) toast('Other devices were removed. Scan the new code to add one again.', 'ok'); }
+    catch { toast('Could not reach Firebase.', 'warn'); setOpen(false); }
   };
-  const close = () => { setOpen(false); if (key) void cancelHandover(s.code).catch(() => {}); setKey(null); };
-  const link = key ? hostLink(s.code, key) : '';
+  const link = key ? hostLink(s.code, `co-${key}`) : '';
   return (
     <>
-      <button className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-semibold hover:border-info" onClick={begin}>📱 Control from phone</button>
-      <Modal open={open} onClose={close} title="Run the event from your phone">
-        {busy || !key ? <p className="text-muted">Preparing…</p> : (
+      <button className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-semibold hover:border-info" onClick={() => show()}>📱 Add device</button>
+      <Modal open={open} onClose={() => setOpen(false)} title="Control from a second device">
+        {!key ? <p className="text-muted">Preparing…</p> : (
           <div className="text-center">
-            <QR text={link} className="mx-auto w-full max-w-[260px]" />
+            <QR text={link} className="mx-auto w-full max-w-[240px]" />
             <ol className="mt-4 space-y-1 text-left text-sm">
-              <li>1. Scan this with <b>your</b> phone (not a team's phone). Control moves to the phone, with everything kept.</li>
-              <li>2. This screen then offers <b>"Show the projector screen"</b>: click it and press Full screen.</li>
-              <li>3. Keep the phone's browser open on the host page with the screen on. It runs the timers and scoring.</li>
+              <li>1. Scan with the helper's phone or laptop (not a team's phone).</li>
+              <li>2. Both devices can now run the auction at the same time: start lots, confirm sales, reveal challenges, fix points.</li>
+              <li>3. <b>This device is the main one</b>: it runs the timers and scoring, so keep it open and online. If it ever stops, press <b>Make main</b> on the other device.</li>
             </ol>
             <div className="mt-3 flex gap-2">
-              <input readOnly id="handover-link" className="field text-xs" value={link} onFocus={(e) => e.currentTarget.select()} />
+              <input readOnly id="cohost-link" className="field text-xs" value={link} onFocus={(e) => e.currentTarget.select()} />
               <Btn size="sm" variant="subtle" onClick={async () => toast((await copyText(link)) ? 'Link copied.' : 'Copy blocked: select the link and copy it.', 'ok')}>Copy</Btn>
             </div>
-            <p className="mt-2 text-xs text-dim">This code works once. Closing this box cancels it. To move control back later, use this same button on the phone.</p>
+            <button className="mt-3 text-xs text-muted underline hover:text-live" onClick={async () => { if (await confirmDialog('Remove all other devices?', 'Every added device loses control immediately. This QR code stops working.', 'Remove')) void show(true); }}>Remove all other devices</button>
           </div>
         )}
       </Modal>

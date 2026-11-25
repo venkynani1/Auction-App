@@ -108,7 +108,8 @@ Needs the Firebase setup above (same project, same environment variables). **Pas
 | Host laptop | `…/#cc` → **Create event** → opens `#cc/host/CODE` |
 | Projector | **Projector ↗** button in the host header (`#cc/screen/CODE`) |
 | Team phones | Scan the QR on the projector (`#play/CODE`), or type the code on the start page |
-| Host from your phone | On the laptop press **📱 Control from phone** and scan the QR with your phone. Control moves to the phone with everything kept; the laptop then shows the projector screen. Use the same button on the phone to move control back. Keep the phone's screen on during the event. |
+| Second controller | On the host screen press **📱 Add device** and scan the QR with a helper's phone or laptop. Both devices control the event at the same time. The first device stays the *main* one (it runs timers and scoring), so keep it open; if it fails, press **Make main** on the other. |
+| Projector | Any device can show `#cc/screen/CODE`: e.g. the laptop shows the projector while a phone controls the event. |
 
 **Running it**
 

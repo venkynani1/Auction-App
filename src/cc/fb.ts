@@ -144,6 +144,49 @@ export async function takeOver(code: string, key: string) {
 }
 export const hostLink = (code: string, key: string) => `${location.origin}${location.pathname}#cc/host/${code}/${key}`;
 
+// ------------------------------------------------------------------ second controllers (co-hosts)
+// The main device runs timers and scoring. Co-hosts see the full game and send each change as a proposal;
+// the main device accepts it if nothing else changed in between.
+const randKey = (n: number) => Array.from({ length: n }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
+export async function coKey(code: string, rotate = false) {
+  const { db } = await fb();
+  const { ref, get, update } = await import('firebase/database');
+  const cur = rotate ? null : ((await get(ref(db, P(code, 'cokey')))).val() as string | null);
+  if (cur) return cur;
+  const key = randKey(10);
+  await update(ref(db, P(code)), { cokey: key, ...(rotate ? { cohosts: null } : {}) });
+  return key;
+}
+export async function joinCohost(code: string, key: string) {
+  const uid = await signIn();
+  const { db } = await fb();
+  const { ref, set } = await import('firebase/database');
+  try { await set(ref(db, P(code, `cohosts/${uid}`)), key); return true; } catch { return false; }
+}
+export async function propose(code: string, base: number, state: string) {
+  const uid = await signIn();
+  const { db } = await fb();
+  const { ref, push, set } = await import('firebase/database');
+  const r = push(ref(db, P(code, `prop/${uid}`)));
+  await set(r, { base, state });
+  return r.key!;
+}
+export async function ackProposal(code: string, uid: string, id: string, ok: boolean) {
+  const { db } = await fb();
+  const { ref, update } = await import('firebase/database');
+  await update(ref(db, P(code)), { [`propAck/${uid}/${id}`]: ok, [`prop/${uid}/${id}`]: null });
+}
+/** A co-host makes itself the main device (e.g. the laptop died). The old main becomes a co-host. */
+export async function becomeMain(code: string) {
+  const uid = await signIn();
+  const { db } = await fb();
+  const { ref, get, update } = await import('firebase/database');
+  const old = (await get(ref(db, P(code, 'owner')))).val() as string | null;
+  await update(ref(db, P(code)), { owner: uid });
+  const key = (await get(ref(db, P(code, 'cokey')))).val() as string | null;
+  if (old && key && old !== uid) await update(ref(db, P(code)), { [`cohosts/${old}`]: key, [`cohosts/${uid}`]: null });
+}
+
 const last = new Map<string, string>();
 /** Multi-path update that skips paths whose value hasn't changed since the last write. */
 export async function hostWrite(code: string, parts: Record<string, unknown>, force = false) {

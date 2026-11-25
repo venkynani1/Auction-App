@@ -3,7 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import * as E from '../engine';
 import type { HostState, RawAnswer, RawBid } from '../types';
-import { claim, forgetWrites, hostWrite, listen, P, readOnce, serverNow, signIn, startServerClock, takeOver } from '../fb';
+import { ackProposal, becomeMain, claim, forgetWrites, hostWrite, joinCohost, listen, P, propose, readOnce, serverNow, signIn, startServerClock, takeOver } from '../fb';
 import { toast } from '../../components/ui';
 import { play } from '../../lib/sound';
 
@@ -27,6 +27,9 @@ interface Ctx {
   /** Run an engine step. Returns false (and shows the reason) if the game refused it. */
   act: (f: (s: HostState) => HostState, ok?: string) => boolean;
   link: Link;
+  /** main = this device runs timers and scoring; co = a second controller that sends its changes to the main device */
+  role: 'main' | 'co';
+  makeMain: () => Promise<void>;
   online: Set<number>;
   answers: Record<string, RawAnswer>;   // current window, host-only
   bidCount: number;
@@ -40,6 +43,11 @@ export function HostProvider({ code, children }: { code: string; children: React
   const [s, setS] = useState<HostState | null>(() => loadLocal(code));
   const ref = useRef<HostState | null>(s);
   const [link, setLink] = useState<Link>('connecting');
+  const [role, setRole] = useState<'main' | 'co'>('main');
+  const roleRef = useRef(role);
+  roleRef.current = role;
+  const mirrorRef = useRef<HostState | null>(null);
+  const pending = useRef(new Map<string, { f: (s: HostState) => HostState; ok?: string; tries: number }>());
   const [online, setOnline] = useState<Set<number>>(new Set());
   const [answers, setAnswers] = useState<Record<string, RawAnswer>>({});
   const answersRef = useRef(answers);
@@ -54,10 +62,22 @@ export function HostProvider({ code, children }: { code: string; children: React
     if (!saveLocal(next)) toast('This browser could not save the game. The Firebase backup still has it.', 'warn');
   }, []);
 
+  const send = useCallback((f: (s: HostState) => HostState, ok: string | undefined, tries: number) => {
+    const cur = ref.current!;
+    const next = f(cur);
+    if (next === cur) return;
+    ref.current = next;           // show it straight away; the main device's copy replaces it when it arrives
+    setS(next);
+    propose(code, cur.rev, JSON.stringify(next))
+      .then((id) => { pending.current.set(id, { f, ok, tries }); })
+      .catch(() => toast('Could not reach Firebase. Check the internet connection.', 'warn'));
+  }, [code]);
+
   const act = useCallback((f: (s: HostState) => HostState, ok?: string) => {
     const cur = ref.current;
     if (!cur) return false;
     try {
+      if (roleRef.current === 'co') { send(f, ok, 0); return true; }
       const next = f(cur);
       if (next !== cur) commit(next);
       if (ok) toast(ok, 'ok');
@@ -68,7 +88,7 @@ export function HostProvider({ code, children }: { code: string; children: React
       toast('Something went wrong. The game was not changed.', 'warn');
       return false;
     }
-  }, [commit]);
+  }, [commit, send]);
 
   // ---- connect: claim ownership, restore from the Firebase backup if this browser has nothing newer
   useEffect(() => {
@@ -79,10 +99,22 @@ export function HostProvider({ code, children }: { code: string; children: React
         void startServerClock();
         // A handover link (#cc/host/CODE/KEY) moves control of the event to this device.
         const key = location.hash.split('/')[3];
-        let mine = await claim(code);
-        if (!mine && key) mine = await takeOver(code, key);
         if (key) history.replaceState(null, '', `#cc/host/${code}`);
-        if (!mine) { if (alive) setLink(key ? 'error' : 'taken'); if (key) toast('That control link has expired. Make a new one on the device running the event.', 'warn'); return; }
+        const coJoin = key?.startsWith('co-') ? key.slice(3) : null;
+        if (coJoin && !(await joinCohost(code, coJoin))) toast('That link is no longer valid. Ask for a new QR code from the main device.', 'warn');
+        let mine = coJoin ? false : await claim(code);
+        if (!mine && key && !coJoin) mine = await takeOver(code, key);
+        if (!mine) {
+          // Not the main device: join as a second controller if this device was added.
+          const raw = await readOnce<string>(P(code, 'host')).catch(() => null);
+          if (!alive) return;
+          if (typeof raw !== 'string') { setLink('taken'); return; }
+          const st = JSON.parse(raw) as HostState;
+          mirrorRef.current = st; ref.current = st; setS(st);
+          rememberEvent({ code, name: st.cfg.name, at: Date.now() });
+          setRole('co'); setLink('live');
+          return;
+        }
         const raw = await readOnce<string | HostState>(P(code, 'host'));
         // Backup is stored as a JSON string: Firebase would otherwise drop nulls and empty lists.
         const remote = typeof raw === 'string' ? (JSON.parse(raw) as HostState) : null;
@@ -93,6 +125,7 @@ export function HostProvider({ code, children }: { code: string; children: React
         forgetWrites();
         commit(best);
         rememberEvent({ code, name: best.cfg.name, at: Date.now() });
+        setRole('main');
         setLink('live');
       } catch (e) {
         console.error(e);
@@ -102,17 +135,74 @@ export function HostProvider({ code, children }: { code: string; children: React
     return () => { alive = false; };
   }, [code, commit]);
 
-  // ---- if another device takes control, stop running the game here
+  // ---- which device is main. If another device becomes main, carry on here as a second controller.
   useEffect(() => {
     if (link !== 'live') return;
     let off: (() => void) | undefined, alive = true;
     void (async () => {
       const uid = await signIn();
-      const o = await listen<string>(P(code, 'owner'), (v) => { if (alive && v && v !== uid) setLink('moved'); });
+      const o = await listen<string>(P(code, 'owner'), (v) => {
+        if (!alive || !v) return;
+        if (v === uid) { if (roleRef.current === 'co') setRole('main'); return; }
+        if (roleRef.current === 'co') return;
+        const tryCo = (left: number) => readOnce<string>(P(code, 'host')).then((raw) => {
+          if (!alive) return;
+          if (typeof raw === 'string') { const st = JSON.parse(raw) as HostState; mirrorRef.current = st; ref.current = st; setS(st); setRole('co'); toast('Another device is now the main one. You can keep controlling from here.', 'info'); }
+          else setLink('moved');
+        }).catch(() => { if (left > 0) setTimeout(() => tryCo(left - 1), 1500); else if (alive) setLink('moved'); });
+        tryCo(3);
+      });
       if (alive) off = o; else o();
     })();
     return () => { alive = false; off?.(); };
   }, [link, code]);
+
+  // ---- second controller: follow the main device's copy, and hear back about each change it sent
+  useEffect(() => {
+    if (link !== 'live' || role !== 'co') return;
+    let offM = () => {}, offA = () => {}, alive = true;
+    listen<string>(P(code, 'host'), (raw) => {
+      if (typeof raw !== 'string') return;
+      const st = JSON.parse(raw) as HostState;
+      mirrorRef.current = st;
+      if (!pending.current.size || st.rev >= (ref.current?.rev ?? 0)) { ref.current = st; setS(st); }
+    }, () => { if (alive) setLink('moved'); }).then((u) => (alive ? (offM = u) : u()));
+    void signIn().then((uid) => listen<Record<string, boolean>>(P(code, `propAck/${uid}`), (acks) => {
+      for (const [id, ok] of Object.entries(acks ?? {})) {
+        const p = pending.current.get(id);
+        if (!p) continue;
+        pending.current.delete(id);
+        if (ok) { if (p.ok) toast(p.ok, 'ok'); continue; }
+        // The game changed at the same moment (e.g. a timer ran out): redo the change on the newest copy.
+        if (mirrorRef.current) { ref.current = mirrorRef.current; setS(mirrorRef.current); }
+        if (p.tries >= 3) { toast('That change clashed with another one. Check the screen and try again.', 'warn'); continue; }
+        try { send(p.f, p.ok, p.tries + 1); } catch (e) { if (e instanceof E.GameError) toast(e.message, 'warn'); }
+      }
+    }).then((u) => (alive ? (offA = u) : u())));
+    return () => { alive = false; offM(); offA(); };
+  }, [link, role, code, send]);
+
+  // ---- main device: accept changes from second controllers if nothing changed in between
+  useEffect(() => {
+    if (link !== 'live' || role !== 'main') return;
+    let off = () => {}, alive = true;
+    const seen = new Set<string>();
+    listen<Record<string, Record<string, { base: number; state: string }>>>(P(code, 'prop'), (all) => {
+      for (const [uid, props] of Object.entries(all ?? {})) {
+        for (const [id, pr] of Object.entries(props ?? {}).sort(([a], [b]) => (a < b ? -1 : 1))) {
+          if (seen.has(id)) continue;
+          seen.add(id);
+          const cur = ref.current!;
+          let ok = false;
+          if (pr.base === cur.rev) {
+            try { const next = JSON.parse(pr.state) as HostState; if (next.code === cur.code && next.v === 1) { commit({ ...next, rev: cur.rev + 1 }); ok = true; } } catch { /* bad proposal */ }
+          }
+          void ackProposal(code, uid, id, ok).catch(() => {});
+        }
+      }
+    }).then((u) => (alive ? (off = u) : u()));
+    return () => { alive = false; off(); };
+  }, [link, role, code, commit]);
 
   // ---- keep the screen on (a sleeping phone would stop the timers and scoring)
   useEffect(() => {
@@ -129,7 +219,7 @@ export function HostProvider({ code, children }: { code: string; children: React
   const backupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const answeredCount = Object.keys(answers).length;
   useEffect(() => {
-    if (!s || link !== 'live') return;
+    if (!s || link !== 'live' || role !== 'main') return;
     if (pubTimer.current) clearTimeout(pubTimer.current);
     pubTimer.current = setTimeout(() => {
       const cur = ref.current!;
@@ -141,12 +231,12 @@ export function HostProvider({ code, children }: { code: string; children: React
     if (backupTimer.current) clearTimeout(backupTimer.current);
     backupTimer.current = setTimeout(() => {
       hostWrite(code, { host: ref.current ? JSON.stringify(ref.current) : null }).catch(() => { /* retried on next change */ });
-    }, 800);
-  }, [s, link, code, answeredCount]);
+    }, 120);
+  }, [s, link, role, code, answeredCount]);
 
   // ---- registrations
   useEffect(() => {
-    if (link !== 'live') return;
+    if (link !== 'live' || role !== 'main') return;
     let off = () => {};
     listen<Record<string, { m: string[]; at: number }>>(P(code, 'reg'), (regs) => {
       let cur = ref.current!;
@@ -160,7 +250,7 @@ export function HostProvider({ code, children }: { code: string; children: React
       if (cur !== ref.current) commit(cur);
     }).then((u) => (off = u));
     return () => off();
-  }, [link, code, commit, sfx]);
+  }, [link, role, code, commit, sfx]);
 
   // ---- presence
   useEffect(() => {
@@ -179,12 +269,13 @@ export function HostProvider({ code, children }: { code: string; children: React
     let off = () => {};
     listen<Record<string, Record<string, RawBid>>>(P(code, `bids/${bidLot}`), (raw) => {
       setBidCount(Object.values(raw ?? {}).reduce((a, b) => a + Object.keys(b ?? {}).length, 0));
+      if (roleRef.current !== 'main') return;
       const cur = ref.current!;
       const next = E.applyBids(cur, raw);
       if (next !== cur) { commit(next); sfx('bid'); }
     }).then((u) => (off = u));
     return () => off();
-  }, [link, code, bidLot, commit, sfx]);
+  }, [link, role, code, bidLot, commit, sfx]);
 
   // ---- answers for the open window
   const winId = s?.cur?.win && lot && ['answer', 'steal'].includes(lot.status) ? s.cur.win.id : null;
@@ -199,7 +290,7 @@ export function HostProvider({ code, children }: { code: string; children: React
   // ---- timers: end auctions, close answer windows (server clock), auto-reveal
   const lastTick = useRef(-1);
   useEffect(() => {
-    if (link !== 'live') return;
+    if (link !== 'live' || role !== 'main') return;
     const id = setInterval(() => {
       const cur = ref.current!;
       const l = E.curLot(cur);
@@ -225,14 +316,19 @@ export function HostProvider({ code, children }: { code: string; children: React
       }
     }, 200);
     return () => clearInterval(id);
-  }, [link, commit, sfx]);
+  }, [link, role, commit, sfx]);
 
-  const value = useMemo(() => (s ? { s, act, link, online, answers, bidCount, muted, setMuted } : null), [s, act, link, online, answers, bidCount, muted]);
+  const makeMain = useCallback(async () => {
+    try { await becomeMain(code); setRole('main'); forgetWrites(); toast('This device is now the main one: it runs the timers and scoring.', 'ok'); }
+    catch { toast('Could not switch. Check the internet connection.', 'warn'); }
+  }, [code]);
+
+  const value = useMemo(() => (s ? { s, act, link, role, makeMain, online, answers, bidCount, muted, setMuted } : null), [s, act, link, role, makeMain, online, answers, bidCount, muted]);
   if (!value || link === 'taken' || link === 'moved' || link === 'missing') {
     return (
       <div className="stage-bg grid min-h-screen place-items-center p-6 text-center">
         <div className="max-w-md">
-          <p className="text-lg text-muted">{link === 'moved' ? 'Control of this event has moved to another device.' : link === 'taken' ? 'Another device is running this event. To control it here, open "📱 Control from phone" on that device and scan its QR code.' : link === 'missing' ? 'This event was not found on this device or in Firebase.' : link === 'error' ? 'Could not connect to Firebase.' : 'Loading event…'}</p>
+          <p className="text-lg text-muted">{link === 'moved' ? 'Control of this event has moved to another device.' : link === 'taken' ? 'Another device is running this event. To control it here too, press "📱 Add device" on that device and scan its QR code.' : link === 'missing' ? 'This event was not found on this device or in Firebase.' : link === 'error' ? 'Could not connect to Firebase.' : 'Loading event…'}</p>
           {(link === 'moved' || link === 'taken') && (
             <div className="mt-5 flex flex-col gap-2">
               <a href={`#cc/screen/${code}`} className="rounded-xl bg-info px-5 py-3 font-bold text-ink">Show the projector screen on this device</a>
