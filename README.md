@@ -1,7 +1,11 @@
-# BID WARS: The Ultimate Office Auction
+# BID WARS 2.0
 
-Auction console + projector screen + live leaderboard for the office auction night.
-React + TypeScript + Tailwind CSS, built with Vite. No server or database: everything is saved in the browser.
+Two games in one app. Opening the link shows a game picker:
+
+1. **BID WARS Classic**: the original office auction (actors, cricketers, singers, mystery round) with console, projector and team rooms. Unchanged; its links (`#console`, `#projector`, `#join/…`) still work.
+2. **Code & Chaos**: a 60-minute tech and entertainment auction. Teams of four, one phone per team, 10-second answer windows, phone bidding and mystery vaults. See [Code & Chaos](#code--chaos) below.
+
+React + TypeScript + Tailwind CSS, built with Vite. Classic saves everything in the browser. Team rooms and Code & Chaos use Firebase Realtime Database (free tier).
 
 ## Put it on Vercel (no coding)
 
@@ -93,6 +97,40 @@ It appears in the standings and on each team's phone, and **Undo** works. (The *
 For local testing, put the same values in a `.env.local` file next to `package.json`.
 The room code belongs to the laptop that first opened it. If you switch laptops, press **New room code** in Setup.
 
+## Code & Chaos
+
+Needs the Firebase setup above (same project, same environment variables). **Paste `database.rules.json` into Firebase again**: it now contains the Code & Chaos rules.
+
+**Links**
+
+| Who | Link |
+|---|---|
+| Host laptop | `…/#cc` → **Create event** → opens `#cc/host/CODE` |
+| Projector | **Projector ↗** button in the host header (`#cc/screen/CODE`) |
+| Team phones | Scan the QR on the projector (`#play/CODE`), or type the code on the start page |
+
+**Running it**
+
+1. **Create event** with the number of teams (team numbers 1…N; change them under **Teams**).
+2. Teams scan the QR, enter their **team number, all four names and a 4–6 digit PIN**. Optional registration code under **Teams**.
+   Duplicate team numbers are refused. A team that changes phones signs in with its PIN; the old phone is signed out.
+   **Teams → Reset PIN** if a team forgets it.
+3. **Start practice auction** (optional, dummy money, thrown away), then **Start actual event**: every team gets ₹10 Cr and 0 points.
+4. Each lot: **START AUCTION** → teams bid (out loud, or on phones for phone-bidding lots) → **CONFIRM SALE** (team number + price, checked against the purse) → **REVEAL CHALLENGE** → 10-second answer window → automatic scoring → **NEXT LOT**.
+5. When the lots are done (or time is up), go to **Final results** and reveal 3rd place, runner-up and champions one at a time.
+
+**Rules built in**
+
+- Round 1 *The Smart Market*: physical bidding, reward shown. Round 2 *Crack the Code*: reward hidden until sold. Round 3 *The Open Market*: bidding on phones. Round 4 *Mystery Takeover*: 4 sealed vaults (+300 pts, +₹2 Cr, a 500-point double challenge, a trap) plus a free-for-all jackpot.
+- OPEN: everyone answers, the owner gets full points, other correct teams 20%. EXCLUSIVE: only the owner answers. STEAL: if the owner misses, a second 10-second window opens for everyone else (50%). Unsold lots can become a free crowd question.
+- Answer windows are timed by the Firebase server: answers after the deadline are refused, and each team can answer once.
+- Final points = points + 50 per full ₹1 Cr left (settings).
+- Everything is changeable under **Lots** (question, base price, reward, OPEN/EXCLUSIVE/STEAL, physical/phone bidding, order, skip), **Questions** (120 built-in questions; add, edit, archive, import/export JSON or CSV) and **Settings**.
+- **Void & replay** for technical problems, **± Points / cash** for manual fixes. Every change is in the **audit log**; **Export results (CSV)** at the end.
+- The game saves itself after every action (this browser + Firebase). Reloading the host page or opening it on the same laptop continues where you left off.
+
+**Keep the answers secret**: phones and the projector only get a question when it is revealed, and its answer only after the window closes. The 120 built-in questions are also in this public GitHub repo, so if teams might look, edit them or import your own under **Questions**.
+
 ## Extras
 
 - `tools/add_photos.py`: downloads each person's photo from Wikipedia into a `photos` folder (run `python tools/add_photos.py` next to the PowerPoint deck). Load that folder in the app with **Players & photos → Add many photos**.
@@ -108,4 +146,8 @@ src/components/     shared UI, podium, confetti, wordmark
 src/views/Room.tsx  the participant's phone screen (join + team room)
 src/lib/rooms.ts    what is sent to Firebase for the rooms
 src/lib/            photos (IndexedDB), sounds, money formatting, CSV
+src/Landing.tsx     game picker (BID WARS 2.0 start page)
+src/cc/             Code & Chaos: engine.ts (rules, scoring), bank.ts (questions),
+                    fb.ts (Firebase), host/ (host dashboard), Screen.tsx (projector), Play.tsx (phones)
+database.rules.json Firebase security rules for both games
 ```
