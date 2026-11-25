@@ -39,7 +39,18 @@
       "$code": {
         "owner": {
           ".read": true,
-          ".write": "auth != null && (!data.exists() || data.val() === auth.uid)"
+          ".write": "auth != null && (!data.exists() || data.val() === auth.uid || (newData.val() === auth.uid && root.child('cc').child($code).child('handover').exists() && newData.parent().child('handoverTry').child(auth.uid).val() === root.child('cc').child($code).child('handover').val()))"
+        },
+        "handover": {
+          ".write": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length >= 8)"
+        },
+        "handoverTry": {
+          ".write": "auth != null && root.child('cc').child($code).child('owner').val() === auth.uid",
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.isString() && newData.val().length <= 20"
+          }
         },
         "pub": {
           ".read": true,

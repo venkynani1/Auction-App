@@ -108,6 +108,7 @@ Needs the Firebase setup above (same project, same environment variables). **Pas
 | Host laptop | `…/#cc` → **Create event** → opens `#cc/host/CODE` |
 | Projector | **Projector ↗** button in the host header (`#cc/screen/CODE`) |
 | Team phones | Scan the QR on the projector (`#play/CODE`), or type the code on the start page |
+| Host from your phone | On the laptop press **📱 Control from phone** and scan the QR with your phone. Control moves to the phone with everything kept; the laptop then shows the projector screen. Use the same button on the phone to move control back. Keep the phone's screen on during the event. |
 
 **Running it**
 

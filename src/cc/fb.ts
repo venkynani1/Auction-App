@@ -118,6 +118,32 @@ export async function claim(code: string) {
   return r.committed && r.snapshot.val() === uid;
 }
 
+// Moving control to another device: the current host publishes a secret key (unreadable to everyone),
+// the new device proves it knows the key in the same write that makes it the owner.
+export async function startHandover(code: string) {
+  const key = Array.from({ length: 10 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
+  const { db } = await fb();
+  const { ref, set } = await import('firebase/database');
+  await set(ref(db, P(code, 'handover')), key);
+  return key;
+}
+export async function cancelHandover(code: string) {
+  const { db } = await fb();
+  const { ref, update } = await import('firebase/database');
+  await update(ref(db, P(code)), { handover: null, handoverTry: null });
+}
+export async function takeOver(code: string, key: string) {
+  const uid = await signIn();
+  const { db } = await fb();
+  const { ref, update } = await import('firebase/database');
+  try {
+    await update(ref(db, P(code)), { owner: uid, [`handoverTry/${uid}`]: key });
+    await update(ref(db, P(code)), { handover: null, handoverTry: null });
+    return true;
+  } catch { return false; }
+}
+export const hostLink = (code: string, key: string) => `${location.origin}${location.pathname}#cc/host/${code}/${key}`;
+
 const last = new Map<string, string>();
 /** Multi-path update that skips paths whose value hasn't changed since the last write. */
 export async function hostWrite(code: string, parts: Record<string, unknown>, force = false) {

@@ -3,7 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import * as E from '../engine';
 import type { HostState, RawAnswer, RawBid } from '../types';
-import { claim, forgetWrites, hostWrite, listen, P, readOnce, serverNow, signIn, startServerClock } from '../fb';
+import { claim, forgetWrites, hostWrite, listen, P, readOnce, serverNow, signIn, startServerClock, takeOver } from '../fb';
 import { toast } from '../../components/ui';
 import { play } from '../../lib/sound';
 
@@ -20,7 +20,7 @@ export const forgetEvent = (code: string) => {
 export function saveLocal(s: HostState) { try { localStorage.setItem(KEY(s.code), JSON.stringify(s)); return true; } catch { return false; } }
 function loadLocal(code: string): HostState | null { try { const v = JSON.parse(localStorage.getItem(KEY(code)) || 'null'); return v?.v === 1 ? v : null; } catch { return null; } }
 
-export type Link = 'connecting' | 'live' | 'taken' | 'error' | 'missing';
+export type Link = 'connecting' | 'live' | 'taken' | 'moved' | 'error' | 'missing';
 
 interface Ctx {
   s: HostState;
@@ -77,7 +77,12 @@ export function HostProvider({ code, children }: { code: string; children: React
       try {
         await signIn();
         void startServerClock();
-        if (!(await claim(code))) { if (alive) setLink('taken'); return; }
+        // A handover link (#cc/host/CODE/KEY) moves control of the event to this device.
+        const key = location.hash.split('/')[3];
+        let mine = await claim(code);
+        if (!mine && key) mine = await takeOver(code, key);
+        if (key) history.replaceState(null, '', `#cc/host/${code}`);
+        if (!mine) { if (alive) setLink(key ? 'error' : 'taken'); if (key) toast('That control link has expired. Make a new one on the device running the event.', 'warn'); return; }
         const raw = await readOnce<string | HostState>(P(code, 'host'));
         // Backup is stored as a JSON string: Firebase would otherwise drop nulls and empty lists.
         const remote = typeof raw === 'string' ? (JSON.parse(raw) as HostState) : null;
@@ -87,6 +92,7 @@ export function HostProvider({ code, children }: { code: string; children: React
         if (!best) { setLink('missing'); return; }
         forgetWrites();
         commit(best);
+        rememberEvent({ code, name: best.cfg.name, at: Date.now() });
         setLink('live');
       } catch (e) {
         console.error(e);
@@ -95,6 +101,28 @@ export function HostProvider({ code, children }: { code: string; children: React
     })();
     return () => { alive = false; };
   }, [code, commit]);
+
+  // ---- if another device takes control, stop running the game here
+  useEffect(() => {
+    if (link !== 'live') return;
+    let off: (() => void) | undefined, alive = true;
+    void (async () => {
+      const uid = await signIn();
+      const o = await listen<string>(P(code, 'owner'), (v) => { if (alive && v && v !== uid) setLink('moved'); });
+      if (alive) off = o; else o();
+    })();
+    return () => { alive = false; off?.(); };
+  }, [link, code]);
+
+  // ---- keep the screen on (a sleeping phone would stop the timers and scoring)
+  useEffect(() => {
+    if (link !== 'live' || !('wakeLock' in navigator)) return;
+    let lock: { release: () => Promise<void> } | null = null;
+    const get = () => { if (document.visibilityState === 'visible') navigator.wakeLock.request('screen').then((l) => { lock = l; }).catch(() => {}); };
+    get();
+    document.addEventListener('visibilitychange', get);
+    return () => { document.removeEventListener('visibilitychange', get); void lock?.release().catch(() => {}); };
+  }, [link]);
 
   // ---- publish public + private views, and back up the full state
   const pubTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -200,8 +228,20 @@ export function HostProvider({ code, children }: { code: string; children: React
   }, [link, commit, sfx]);
 
   const value = useMemo(() => (s ? { s, act, link, online, answers, bidCount, muted, setMuted } : null), [s, act, link, online, answers, bidCount, muted]);
-  if (!value) {
-    return <div className="grid min-h-screen place-items-center p-6 text-center text-muted">{link === 'taken' ? 'Another computer runs this event. Open it there, or create a new event.' : link === 'missing' ? 'This event was not found on this computer or in Firebase.' : link === 'error' ? 'Could not connect to Firebase.' : 'Loading event…'}</div>;
+  if (!value || link === 'taken' || link === 'moved' || link === 'missing') {
+    return (
+      <div className="stage-bg grid min-h-screen place-items-center p-6 text-center">
+        <div className="max-w-md">
+          <p className="text-lg text-muted">{link === 'moved' ? 'Control of this event has moved to another device.' : link === 'taken' ? 'Another device is running this event. To control it here, open "📱 Control from phone" on that device and scan its QR code.' : link === 'missing' ? 'This event was not found on this device or in Firebase.' : link === 'error' ? 'Could not connect to Firebase.' : 'Loading event…'}</p>
+          {(link === 'moved' || link === 'taken') && (
+            <div className="mt-5 flex flex-col gap-2">
+              <a href={`#cc/screen/${code}`} className="rounded-xl bg-info px-5 py-3 font-bold text-ink">Show the projector screen on this device</a>
+              <a href="#cc" className="text-sm text-muted underline">Back to events</a>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   }
   return <C.Provider value={value}>{children}</C.Provider>;
 }

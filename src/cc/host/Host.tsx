@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as E from '../engine';
 import type { HostState, Lot } from '../types';
-import { joinLink, serverNow, useServerNow } from '../fb';
+import { cancelHandover, hostLink, hostWrite, joinLink, serverNow, startHandover, useServerNow } from '../fb';
 import { HostProvider, useHost } from './store';
 import { clock, CodeBlock, Countdown, Partic, QR, RoundChip, TeamBadge } from '../ui';
 import { Btn, confirmDialog, ConfirmHost, cx, Field, Label, Modal, toast, ToastHost } from '../../components/ui';
@@ -30,7 +30,7 @@ function HostShell() {
   const total = E.EVENT_MINUTES(s.cfg);
   return (
     <div className="stage-bg min-h-screen" onClick={unlockAudio}>
-      <header className="sticky top-0 z-50 border-b border-line bg-ink/90 backdrop-blur">
+      <header className="z-50 border-b border-line bg-ink/90 backdrop-blur md:sticky md:top-0">
         <div className="mx-auto flex max-w-[1700px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2">
           <a href="#cc" className="font-[family-name:var(--font-display)] text-xl font-bold uppercase"><span className="cyan-text">Code</span><span className="text-gold">&amp;</span><span className="cyan-text">Chaos</span></a>
           <span className="rounded-md bg-info/15 px-2 py-0.5 font-[family-name:var(--font-display)] font-bold tracking-widest text-info">{s.code}</span>
@@ -47,6 +47,7 @@ function HostShell() {
             )}
             <span className="text-xs text-muted" title="Team phones online">📱 {online.size}</span>
             <a className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-semibold hover:border-info" href={`#cc/screen/${s.code}`} target="_blank" rel="noreferrer">Projector ↗</a>
+            <PhoneControl />
             <Btn size="sm" variant="ghost" onClick={() => setMuted(!muted)} aria-label={muted ? 'Unmute' : 'Mute'}>{muted ? '🔇' : '🔊'}</Btn>
             <span className={cx('h-2.5 w-2.5 rounded-full', link === 'live' ? 'bg-ok' : 'bg-live animate-blink')} title={link === 'live' ? 'Connected' : 'Not connected'} />
           </div>
@@ -65,6 +66,46 @@ function HostShell() {
         {tab === 'settings' && <SettingsTab />}
       </main>
     </div>
+  );
+}
+
+/** Move control of the event to another device (e.g. the host's phone) by scanning a one-time QR code. */
+function PhoneControl() {
+  const { s } = useHost();
+  const [open, setOpen] = useState(false);
+  const [key, setKey] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const begin = async () => {
+    setOpen(true); setBusy(true);
+    try {
+      await hostWrite(s.code, { host: JSON.stringify(s) }, true);   // the phone starts from the very latest state
+      setKey(await startHandover(s.code));
+    } catch { toast('Could not reach Firebase.', 'warn'); setOpen(false); }
+    setBusy(false);
+  };
+  const close = () => { setOpen(false); if (key) void cancelHandover(s.code).catch(() => {}); setKey(null); };
+  const link = key ? hostLink(s.code, key) : '';
+  return (
+    <>
+      <button className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-semibold hover:border-info" onClick={begin}>📱 Control from phone</button>
+      <Modal open={open} onClose={close} title="Run the event from your phone">
+        {busy || !key ? <p className="text-muted">Preparing…</p> : (
+          <div className="text-center">
+            <QR text={link} className="mx-auto w-full max-w-[260px]" />
+            <ol className="mt-4 space-y-1 text-left text-sm">
+              <li>1. Scan this with <b>your</b> phone (not a team's phone). Control moves to the phone, with everything kept.</li>
+              <li>2. This screen then offers <b>"Show the projector screen"</b>: click it and press Full screen.</li>
+              <li>3. Keep the phone's browser open on the host page with the screen on. It runs the timers and scoring.</li>
+            </ol>
+            <div className="mt-3 flex gap-2">
+              <input readOnly id="handover-link" className="field text-xs" value={link} onFocus={(e) => e.currentTarget.select()} />
+              <Btn size="sm" variant="subtle" onClick={async () => toast((await copyText(link)) ? 'Link copied.' : 'Copy blocked: select the link and copy it.', 'ok')}>Copy</Btn>
+            </div>
+            <p className="mt-2 text-xs text-dim">This code works once. Closing this box cancels it. To move control back later, use this same button on the phone.</p>
+          </div>
+        )}
+      </Modal>
+    </>
   );
 }
 
@@ -102,7 +143,7 @@ function RegistrationPanel() {
     <div className="panel p-5 sm:p-7">
       <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
         <div>
-          <QR text={link} className="w-full max-w-[300px]" />
+          <QR text={link} className="mx-auto w-full max-w-[160px] sm:max-w-[300px] lg:mx-0" />
           <div className="mt-3 flex gap-2">
             <input readOnly id="join-link" className="field text-xs" value={link} onFocus={(e) => e.currentTarget.select()} />
             <Btn size="sm" variant="subtle" onClick={async () => toast((await copyText(link)) ? 'Link copied.' : 'Copy blocked: select the link and copy it.', 'ok')}>Copy</Btn>
