@@ -117,7 +117,7 @@ Needs the Firebase setup above (same project, same environment variables). **Pas
 2. Teams scan the QR, enter their **team number, all four names and a 4–6 digit PIN**. Optional registration code under **Teams**.
    Duplicate team numbers are refused. A team that changes phones signs in with its PIN; the old phone is signed out.
    **Teams → Reset PIN** if a team forgets it.
-3. **Start practice auction** (optional, dummy money, thrown away), then **Start actual event**: every team gets ₹10 Cr and 0 points.
+3. **Start practice auction** (optional, dummy money, thrown away), then **Start actual event**: every team gets ₹20 Cr and 0 points.
 4. One continuous auction. Press **NEXT QUESTION**: a random unused question (or one you pick, or only Medium / Hard) goes up for auction.
    Teams bid (out loud, or on their phones) → **CONFIRM SALE** (team number + price, checked against the purse) → **REVEAL QUESTION**.
 5. Only the winning team answers (10 seconds). **Right**: they get the reward. **Wrong**: the question automatically opens to every
@@ -127,7 +127,8 @@ Needs the Firebase setup above (same project, same environment variables). **Pas
 
 **Rules built in**
 
-- Medium questions: base ₹50 L, 100 points. Hard: base ₹80 L, 200 points (Settings).
+- Each team starts with ₹20 Cr. Every question starts at ₹20 L; bids go up ₹5 L at a time below ₹1 Cr, then ₹0.25 Cr at a time (95 L → 1 Cr → 1.25 Cr → 1.5 Cr …).
+- Medium questions are worth 100 points, Hard 200 (Settings).
 - Final points = points + 50 per full ₹1 Cr left (Settings).
 - 136 built-in medium and hard questions (coding, tech & AI, cloud/SQL/testing, logic, movies, sports, emoji). Add, edit, archive, import/export JSON or CSV under **Questions**. The **Played** tab lists every question so far.
 - Answer windows are timed by the Firebase server: answers after the deadline are refused, and each team can answer once.

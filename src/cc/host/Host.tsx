@@ -337,7 +337,7 @@ function SettleCtl({ l }: { l: Lot }) {
   else if (!t?.members) problem = `Team ${team} is not registered.`;
   else if (!t.eligible) problem = `Team ${team} is not playing.`;
   else if (!(p >= l.base)) problem = `At least the base price, ${E.money(l.base)}.`;
-  else if (p !== l.base && p % s.cfg.inc !== 0) problem = `Use steps of ${E.money(s.cfg.inc)}.`;
+  else if (!E.onBidGrid(s.cfg, p, l.base)) problem = `Use ${E.stepText(s.cfg)} (e.g. ${E.money(E.nextBid(s.cfg, p))}).`;
   else if (purse !== null && p > purse) problem = `Team ${team} only has ${E.money(purse)}.`;
   else if (differs && !reason.trim()) problem = high ? 'This differs from the phone auction result. Give a reason.' : 'No phone bids arrived. Give a reason to sell anyway.';
   const confirm = () => act((x) => E.settle(x, { team: tNo, price: p, override: differs ? reason : undefined }, serverNow()));
@@ -346,7 +346,7 @@ function SettleCtl({ l }: { l: Lot }) {
       <div className="mb-4 rounded-xl border border-gold/40 bg-gold/10 px-4 py-2 font-semibold text-gold">⏰ Time's up. {l.mode === 'mobile' ? (high ? `Highest phone bid: Team ${high.team}, ${E.money(high.amount)}.` : 'No phone bids.') : 'Enter the winning team and the final price.'}</div>
       <form className="grid gap-4 md:grid-cols-[1fr_1fr_1.2fr]" onSubmit={(e) => { e.preventDefault(); if (!problem) confirm(); }}>
         <Field label="Winning team number"><input id="settle-team" autoFocus className="field !h-16 text-center font-[family-name:var(--font-display)] text-4xl font-bold num" inputMode="numeric" value={team} onChange={(e) => setTeam(e.target.value.replace(/\D/g, ''))} /></Field>
-        <Field label="Final price (lakh)" hint={`${E.money(p || 0)} · step ${E.money(s.cfg.inc)}`}>
+        <Field label="Final price (lakh)" hint={`${E.money(p || 0)} · ${E.stepText(s.cfg)}`}>
           <input id="settle-price" className="field !h-16 text-center font-[family-name:var(--font-display)] text-4xl font-bold num" inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value.replace(/\D/g, ''))} />
         </Field>
         <div className="rounded-xl border border-line bg-ink/50 p-3 text-sm">
@@ -355,7 +355,7 @@ function SettleCtl({ l }: { l: Lot }) {
           <div className="mt-1 flex justify-between border-t border-line pt-1"><span className="text-muted">Left after sale</span><b className={cx('num', purse !== null && p > purse && 'text-live')}>{purse === null || !p ? '—' : E.money(purse - p)}</b></div>
         </div>
         <div className="flex flex-wrap gap-1.5 md:col-span-3">
-          {[0, 1, 2, 5, 10].map((k) => { const v = l.base + k * s.cfg.inc; return <Btn key={k} type="button" size="sm" variant="subtle" onClick={() => setPrice(String(v))}>{E.money(v)}</Btn>; })}
+          {[0, 1, 2, 4, 8, 12, 16, 18, 20, 24].map((k) => { const v = E.bidSteps(s.cfg, l.base, k); return <Btn key={k} type="button" size="sm" variant="subtle" onClick={() => setPrice(String(v))}>{E.money(v)}</Btn>; })}
         </div>
         {l.mode === 'mobile' && differs && (
           <div className="md:col-span-3"><Field label="Override reason (saved in the audit log)"><input id="settle-reason" className="field" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Team 4's phone died mid-auction" /></Field></div>

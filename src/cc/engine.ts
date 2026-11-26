@@ -27,17 +27,38 @@ export const DEFAULT_CONFIG: Config = {
   name: 'BID WARS 2.0: Code & Chaos',
   date: '',
   teamNos: Array.from({ length: 20 }, (_, i) => i + 1),
-  purse: 1000, inc: 10, auctionSec: 25, answerSec: 10,
+  purse: 2000, inc: 5, incCr: 25, auctionSec: 25, answerSec: 10,
   share: 0.2, stealShare: 0.5, conv: 50,
   board: 'always', sound: true, auto: false,
-  practicePurse: 1000,
+  practicePurse: 2000,
   schedule: [60],             // event length in minutes (shown as a timer; the host decides when to finish)
   crowdReward: 50, jackpotReward: 300,
   vaultPool: DEFAULT_VAULTS,
   regCode: '',
-  levels: { Easy: { base: 40, reward: 80 }, Medium: { base: 50, reward: 100 }, Hard: { base: 80, reward: 200 } },
+  levels: { Easy: { base: 20, reward: 80 }, Medium: { base: 20, reward: 100 }, Hard: { base: 20, reward: 200 } },
   bidMode: 'physical',
 };
+
+// Bids go up in lakhs below ₹1 Cr (₹5 L steps by default), then in ₹0.25 Cr steps: … 95 L → 1 Cr → 1.25 Cr → 1.5 Cr …
+const CR = 100;
+const stepCr = (cfg: Pick<Config, 'incCr'>) => cfg.incCr ?? 25;
+/** Is this a price teams can bid (the base price always is)? */
+export function onBidGrid(cfg: Pick<Config, 'inc' | 'incCr'>, price: number, base: number) {
+  if (price === base) return true;
+  return price < CR ? price % cfg.inc === 0 : price % stepCr(cfg) === 0;
+}
+/** The next valid bid above this amount. */
+export function nextBid(cfg: Pick<Config, 'inc' | 'incCr'>, amount: number) {
+  if (amount < CR) { const n = Math.floor(amount / cfg.inc) * cfg.inc + cfg.inc; return n > CR ? CR : n; }
+  return Math.floor(amount / stepCr(cfg)) * stepCr(cfg) + stepCr(cfg);
+}
+/** Several bids above `from` (k = 1 is the next one). */
+export function bidSteps(cfg: Pick<Config, 'inc' | 'incCr'>, from: number, k: number) {
+  let a = from;
+  for (let i = 0; i < k; i++) a = nextBid(cfg, a);
+  return a;
+}
+export const stepText = (cfg: Pick<Config, 'inc' | 'incCr'>) => `${money(cfg.inc)} steps below ₹1 Cr, then ₹${stepCr(cfg) / 100} Cr steps`;
 
 /** Base price and reward for a question of this difficulty. */
 export function levelOf(cfg: Config, difficulty: string) {
@@ -355,7 +376,7 @@ export function applyBids(s: HostState, raw: Record<string, Record<string, RawBi
 export function minNextBid(s: HostState) {
   const l = curLot(s);
   if (!l || !s.cur) return null;
-  return s.cur.high ? s.cur.high.amount + s.cfg.inc : l.base;
+  return s.cur.high ? nextBid(s.cfg, s.cur.high.amount) : l.base;
 }
 
 export interface SettleInput { team: number; price: number; override?: string }
@@ -369,7 +390,7 @@ export function settle(s: HostState, input: SettleInput, now: number) {
   if (!t!.eligible) fail(`Team ${input.team} is not playing in this event.`);
   const price = Math.round(input.price);
   if (!Number.isFinite(price) || price < l0!.base) fail(`The price must be at least the base price, ${money(l0!.base)}.`);
-  if (price !== l0!.base && price % s.cfg.inc !== 0) fail(`Prices go up in steps of ${money(s.cfg.inc)}.`);
+  if (!onBidGrid(s.cfg, price, l0!.base)) fail(`Prices go up in ${stepText(s.cfg)}.`);
   const purse = purseOf(s, input.team, l0!.practice);
   if (price > purse) fail(`Team ${input.team} only has ${money(purse)} left.`);
   const high = s.cur!.high;
@@ -750,7 +771,7 @@ export function buildPub(s: HostState, answeredCount = 0): Pub {
       participation: l.kind === 'crowd' || l.kind === 'jackpot' ? 'all' : l.participation,
       owner: l.owner, price: l.price,
       deadline: l.status === 'auction' ? c.deadline : null,
-      minBid: l.mode === 'mobile' && l.status === 'auction' ? (c.high ? c.high.amount + s.cfg.inc : l.base) : null,
+      minBid: l.mode === 'mobile' && l.status === 'auction' ? (c.high ? nextBid(s.cfg, c.high.amount) : l.base) : null,
       high: l.mode === 'mobile' && c.high ? { team: c.high.team, amount: c.high.amount } : null,
       verbal: l.mode === 'physical' ? c.verbal : null,
       vault: l.kind === 'vault' && ['vault', 'answer', 'results', 'done'].includes(l.status) ? l.vault : null,
@@ -782,7 +803,7 @@ export function buildPub(s: HostState, answeredCount = 0): Pub {
     registered: registeredTeams(s).map((t) => t.no),
     clockStart: s.clockStart, liveStart: s.liveStart, schedule: s.cfg.schedule,
     round, roundName: '',
-    cfg: { purse: s.cfg.purse, inc: s.cfg.inc, answerSec: Math.min(MAX_ANSWER_SEC, s.cfg.answerSec), auctionSec: s.cfg.auctionSec, share: s.cfg.share, stealShare: s.cfg.stealShare, conv: s.cfg.conv, sound: s.cfg.sound },
+    cfg: { purse: s.cfg.purse, inc: s.cfg.inc, incCr: s.cfg.incCr ?? 25, answerSec: Math.min(MAX_ANSWER_SEC, s.cfg.answerSec), auctionSec: s.cfg.auctionSec, share: s.cfg.share, stealShare: s.cfg.stealShare, conv: s.cfg.conv, sound: s.cfg.sound },
     lot, q, res,
     board: boardVisible(s) && s.stage !== 'registration' ? standings(s) : null,
     history,

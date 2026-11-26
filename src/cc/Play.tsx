@@ -264,13 +264,13 @@ function BidPad({ code, pub, l, me, priv }: { code: string; pub: Pub; l: PubLot;
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ t: string; ok: boolean } | null>(null);
   const left = useLeft(l.deadline);
-  const inc = pub.cfg.inc;
+  const grid = { inc: pub.cfg.inc, incCr: pub.cfg.incCr ?? 25 };
   const min = l.minBid ?? l.base;
   const purse = priv?.purse ?? 0;
   const leading = l.high?.team === me.team;
-  const quick = useMemo(() => [min, min + inc, min + 2 * inc, min + 5 * inc], [min, inc]);
+  const quick = useMemo(() => [min, E.bidSteps(grid, min, 1), E.bidSteps(grid, min, 2), E.bidSteps(grid, min, 4)], [min, grid.inc, grid.incCr]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (pick !== null && pick < min) setPick(null); }, [min, pick]);
-  const valid = (a: number) => a >= min && a <= purse && (a === l.base || a % inc === 0);
+  const valid = (a: number) => a >= min && a <= purse && E.onBidGrid(grid, a, l.base);
   const customLakh = Math.round(Number(custom) * 100);
   const send = async () => {
     if (pick === null) return;
@@ -300,10 +300,10 @@ function BidPad({ code, pub, l, me, priv }: { code: string; pub: Pub; l: PubLot;
             ))}
           </div>
           <div className="mt-2 flex gap-2">
-            <input id="p-custom" className="field num" inputMode="decimal" placeholder="Custom amount in ₹ Cr, e.g. 2.4" value={custom} onChange={(e) => setCustom(e.target.value.replace(/[^\d.]/g, ''))} />
+            <input id="p-custom" className="field num" inputMode="decimal" placeholder="Custom amount in ₹ Cr, e.g. 0.45 or 1.75" value={custom} onChange={(e) => setCustom(e.target.value.replace(/[^\d.]/g, ''))} />
             <Btn variant="subtle" disabled={!custom || !valid(customLakh)} onClick={() => setPick(customLakh)}>Set</Btn>
           </div>
-          {custom && !valid(customLakh) && <p className="mt-1 text-xs text-warn">{customLakh > purse ? 'More than your purse.' : customLakh < min ? `At least ${E.money(min)}.` : `Use steps of ${E.money(inc)}.`}</p>}
+          {custom && !valid(customLakh) && <p className="mt-1 text-xs text-warn">{customLakh > purse ? 'More than your purse.' : customLakh < min ? `At least ${E.money(min)}.` : `Use ${E.stepText(grid)}.`}</p>}
           <Btn variant="gold" size="xl" className="mt-3 w-full" disabled={pick === null || busy || !valid(pick)} onClick={send}>{pick === null ? 'Choose an amount' : `CONFIRM BID ${E.money(pick)}`}</Btn>
         </>
       )}

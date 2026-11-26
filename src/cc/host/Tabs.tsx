@@ -336,7 +336,8 @@ export function SettingsTab() {
           <Field label="Event name"><input id="set-name" className="field" value={c.name} onChange={(e) => set({ name: e.target.value })} /></Field>
           <Field label="Date"><input id="set-date" type="date" className="field" value={c.date} onChange={(e) => set({ date: e.target.value })} /></Field>
           <Field label="Starting purse (lakh)" hint={locked ? 'Locked after start.' : E.money(c.purse)}><input id="set-purse" className="field num" type="number" disabled={locked} value={c.purse} onChange={(e) => set({ purse: num(e.target.value, 100, 100000) })} /></Field>
-          <Field label="Minimum bid increment (lakh)"><input id="set-inc" className="field num" type="number" value={c.inc} onChange={(e) => set({ inc: num(e.target.value, 1, 1000) })} /></Field>
+          <Field label="Bid step from ₹1 Cr (lakh; 25 = ₹0.25 Cr)"><input id="set-inccr" className="field num" type="number" value={c.incCr ?? 25} onChange={(e) => set({ incCr: num(e.target.value, 1, 1000) })} /></Field>
+          <Field label="Bid step below ₹1 Cr (lakh)"><input id="set-inc" className="field num" type="number" value={c.inc} onChange={(e) => set({ inc: num(e.target.value, 1, 1000) })} /></Field>
           <Field label="Auction timer (seconds)"><input id="set-auction" className="field num" type="number" value={c.auctionSec} onChange={(e) => set({ auctionSec: num(e.target.value, 5, 300) })} /></Field>
           <Field label="Answer timer (seconds, max 10)"><input id="set-answer" className="field num" type="number" max={10} value={c.answerSec} onChange={(e) => set({ answerSec: num(e.target.value, 3, 10) })} /></Field>
           <Field label="If the winner is wrong: other correct teams get (% of reward)"><input id="set-steal" className="field num" type="number" value={Math.round(c.stealShare * 100)} onChange={(e) => set({ stealShare: num(e.target.value, 0, 100) / 100 })} /></Field>

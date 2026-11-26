@@ -92,7 +92,8 @@ export interface Config {
   date: string;
   teamNos: number[];
   purse: number;              // lakhs
-  inc: number;                // lakhs
+  inc: number;                // bid step below ₹1 Cr (lakhs)
+  incCr?: number;             // bid step from ₹1 Cr upwards (lakhs; 25 = ₹0.25 Cr)
   auctionSec: number;
   answerSec: number;          // ≤ 10
   share: number;              // open: other correct teams get this share of the reward (0.2)
@@ -172,7 +173,7 @@ export interface Pub {
   clockStart: number | null; liveStart: number | null;
   schedule: number[];
   round: number; roundName: string;
-  cfg: { purse: number; inc: number; answerSec: number; auctionSec: number; share: number; stealShare: number; conv: number; sound: boolean };
+  cfg: { purse: number; inc: number; incCr: number; answerSec: number; auctionSec: number; share: number; stealShare: number; conv: number; sound: boolean };
   lot: PubLot | null;
   q: PubQuestion | null;
   res: (LotResult & { lotId: string }) | null;
