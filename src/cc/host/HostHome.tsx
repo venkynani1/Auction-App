@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ccConfigured } from '../fb';
 import { createEvent, forgetEvent, myEvents } from './store';
+import { deleteEvent } from '../fb';
 import { Btn, confirmDialog, Field, toast } from '../../components/ui';
 
 export function HostHome() {
@@ -60,7 +61,13 @@ export function HostHome() {
                     <span className="min-w-0 flex-1 truncate font-semibold">{e.name}</span>
                     <span className="text-xs text-dim">{new Date(e.at).toLocaleDateString()}</span>
                     <Btn size="sm" variant="primary" onClick={() => (location.hash = `cc/host/${e.code}`)}>Open</Btn>
-                    <Btn size="sm" variant="ghost" onClick={async () => { if (await confirmDialog('Remove from this list?', 'The event stays in Firebase; it is only removed from this browser\'s list and saved copy.', 'Remove')) { forgetEvent(e.code); setList(myEvents()); } }}>Remove</Btn>
+                    <Btn size="sm" variant="ghost" className="hover:!text-live" onClick={async () => {
+                      if (!(await confirmDialog(`Delete event ${e.code}?`, 'The event is deleted for everyone: teams, scores, questions and history. Team phones and the projector will show "no event". This cannot be undone.', 'Delete event'))) return;
+                      const r = ccConfigured ? await deleteEvent(e.code) : 'denied';
+                      if (r === 'offline') return toast('Could not reach Firebase. Nothing was deleted.', 'warn');
+                      forgetEvent(e.code); setList(myEvents());
+                      toast(r === 'ok' ? `Event ${e.code} deleted.` : `Removed from this list. Only the main device of ${e.code} can delete it from Firebase.`, r === 'ok' ? 'ok' : 'info');
+                    }}>Delete</Btn>
                   </div>
                 ))}
               </div>

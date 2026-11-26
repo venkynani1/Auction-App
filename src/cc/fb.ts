@@ -144,6 +144,14 @@ export async function takeOver(code: string, key: string) {
 }
 export const hostLink = (code: string, key: string) => `${location.origin}${location.pathname}#cc/host/${code}/${key}`;
 
+/** Delete the whole event from Firebase (main device only). Phones and the projector then show "no event". */
+export async function deleteEvent(code: string): Promise<'ok' | 'denied' | 'offline'> {
+  await signIn();
+  const { db } = await fb();
+  const { ref, remove } = await import('firebase/database');
+  try { await remove(ref(db, P(code))); return 'ok'; } catch (e) { return isPerm(e) ? 'denied' : 'offline'; }
+}
+
 // ------------------------------------------------------------------ second controllers (co-hosts)
 // The main device runs timers and scoring. Co-hosts see the full game and send each change as a proposal;
 // the main device accepts it if nothing else changed in between.

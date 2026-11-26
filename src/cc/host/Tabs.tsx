@@ -2,8 +2,8 @@ import { useMemo, useRef, useState } from 'react';
 import * as E from '../engine';
 import type { Config, Group, HostState, Lot, Participation, Question } from '../types';
 import { GROUPS } from '../types';
-import { hostClearTeam, hostResetPin, serverNow } from '../fb';
-import { useHost } from './store';
+import { deleteEvent, hostClearTeam, hostResetPin, serverNow } from '../fb';
+import { forgetEvent, useHost } from './store';
 import { CodeBlock, Partic, TeamBadge } from '../ui';
 import { Btn, confirmDialog, cx, Field, Label, Modal, toast } from '../../components/ui';
 import { saveFile } from '../../lib/util';
@@ -368,7 +368,7 @@ function ImportModal({ open, onClose }: { open: boolean; onClose: () => void }) 
 
 // =====================================================================================================
 export function SettingsTab() {
-  const { s, act } = useHost();
+  const { s, act, role } = useHost();
   const c = s.cfg;
   const locked = s.stage !== 'registration';
   const set = (patch: Partial<Config>) => act((x) => E.configure(x, patch));
@@ -425,6 +425,18 @@ export function SettingsTab() {
             }} />
           </div>
           <p className="mt-2 text-xs text-dim">The game also saves itself in this browser and in Firebase after every action.</p>
+        </div>
+        <div className="panel border-live/40 p-5">
+          <h3 className="font-[family-name:var(--font-display)] text-2xl font-bold uppercase text-live">Delete event</h3>
+          <p className="mt-1 text-sm text-muted">Removes this event for everyone: teams, scores, questions and history. Export the results first if you want to keep them.</p>
+          <Btn variant="danger" className="mt-3" disabled={role !== 'main'} onClick={async () => {
+            if (!(await confirmDialog(`Delete event ${s.code}?`, 'Team phones and the projector will show "no event". This cannot be undone.', 'Delete event'))) return;
+            const r = await deleteEvent(s.code);
+            if (r !== 'ok') return toast(r === 'denied' ? 'Only the main device can delete the event.' : 'Could not reach Firebase. Nothing was deleted.', 'warn');
+            forgetEvent(s.code);
+            location.hash = 'cc';
+          }}>Delete this event</Btn>
+          {role !== 'main' && <p className="mt-2 text-xs text-dim">Only the main device can delete the event.</p>}
         </div>
         <div className="panel p-5">
           <h3 className="font-[family-name:var(--font-display)] text-2xl font-bold uppercase">Audit log</h3>

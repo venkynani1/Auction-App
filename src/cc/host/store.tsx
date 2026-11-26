@@ -142,7 +142,8 @@ export function HostProvider({ code, children }: { code: string; children: React
     void (async () => {
       const uid = await signIn();
       const o = await listen<string>(P(code, 'owner'), (v) => {
-        if (!alive || !v) return;
+        if (!alive) return;
+        if (!v) { forgetEvent(code); setLink('missing'); return; }   // the event was deleted
         if (v === uid) { if (roleRef.current === 'co') setRole('main'); return; }
         if (roleRef.current === 'co') return;
         const tryCo = (left: number) => readOnce<string>(P(code, 'host')).then((raw) => {
@@ -328,7 +329,7 @@ export function HostProvider({ code, children }: { code: string; children: React
     return (
       <div className="stage-bg grid min-h-screen place-items-center p-6 text-center">
         <div className="max-w-md">
-          <p className="text-lg text-muted">{link === 'moved' ? 'Control of this event has moved to another device.' : link === 'taken' ? 'Another device is running this event. To control it here too, press "📱 Add device" on that device and scan its QR code.' : link === 'missing' ? 'This event was not found on this device or in Firebase.' : link === 'error' ? 'Could not connect to Firebase.' : 'Loading event…'}</p>
+          <p className="text-lg text-muted">{link === 'moved' ? 'Control of this event has moved to another device.' : link === 'taken' ? 'Another device is running this event. To control it here too, press "📱 Add device" on that device and scan its QR code.' : link === 'missing' ? 'This event was deleted or does not exist.' : link === 'error' ? 'Could not connect to Firebase.' : 'Loading event…'}</p>
           {(link === 'moved' || link === 'taken') && (
             <div className="mt-5 flex flex-col gap-2">
               <a href={`#cc/screen/${code}`} className="rounded-xl bg-info px-5 py-3 font-bold text-ink">Show the projector screen on this device</a>

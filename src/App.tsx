@@ -106,7 +106,7 @@ export function App() {
   switch (t.k) {
     case 'landing': return <Landing />;
     case 'room': return <RoomApp code={t.code} team={t.team} />;
-    case 'cc': return <div className="theme-cc"><HostHome /></div>;
+    case 'cc': return <div className="theme-cc"><HostHome /><ConfirmHost /><ToastHost /></div>;
     case 'cc-host': return <div className="theme-cc"><HostApp key={t.code} code={t.code} /></div>;
     case 'cc-screen': return <Screen key={t.code} code={t.code} />;
     case 'cc-play': return <Play key={t.code} code={t.code} />;
