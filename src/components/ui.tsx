@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ');
 
@@ -50,7 +51,9 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
     return () => window.removeEventListener('keydown', k);
   }, [open, onClose]);
   if (!open) return null;
-  return (
+  // Rendered at the page root: inside a blurred/sticky header, "fixed" would be relative to the header and get cut off.
+  // The nearest game theme wrapper is used so the dialog keeps that game's colours.
+  return createPortal(
     <div className="fixed inset-0 z-[80] grid place-items-center bg-ink/80 p-4 backdrop-blur-sm animate-fade" onMouseDown={onClose}>
       <div role="dialog" aria-modal aria-label={title} className={cx('panel max-h-[90vh] w-full overflow-auto scroll-thin shadow-2xl animate-rise', wide ? 'max-w-3xl' : 'max-w-lg')} onMouseDown={(e) => e.stopPropagation()}>
         <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-panel px-5 py-3.5">
@@ -59,7 +62,8 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
         </div>
         <div className="p-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.querySelector('.theme-cc') ?? document.body,
   );
 }
 
