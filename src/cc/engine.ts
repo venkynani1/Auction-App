@@ -31,11 +31,19 @@ export const DEFAULT_CONFIG: Config = {
   share: 0.2, stealShare: 0.5, conv: 50,
   board: 'always', sound: true, auto: false,
   practicePurse: 1000,
-  schedule: [4, 3, 11, 12, 12, 12, 6],
+  schedule: [60],             // event length in minutes (shown as a timer; the host decides when to finish)
   crowdReward: 50, jackpotReward: 300,
   vaultPool: DEFAULT_VAULTS,
   regCode: '',
+  levels: { Easy: { base: 40, reward: 80 }, Medium: { base: 50, reward: 100 }, Hard: { base: 80, reward: 200 } },
+  bidMode: 'physical',
 };
+
+/** Base price and reward for a question of this difficulty. */
+export function levelOf(cfg: Config, difficulty: string) {
+  const L = cfg.levels ?? DEFAULT_CONFIG.levels!;
+  return L[difficulty as keyof typeof L] ?? L.Medium;
+}
 
 export const MAX_ANSWER_SEC = 10;
 export const EVENT_MINUTES = (cfg: Config) => cfg.schedule.reduce((a, b) => a + b, 0);
@@ -54,8 +62,8 @@ export function money(lakh: number) {
 export function lotLabel(l: Pick<Lot, 'kind' | 'seq' | 'round'>) {
   if (l.kind === 'vault') return `VAULT ${l.seq}`;
   if (l.kind === 'jackpot') return 'FINAL JACKPOT';
-  if (l.kind === 'crowd') return 'CROWD QUESTION';
-  if (l.kind === 'practice') return 'PRACTICE LOT';
+  if (l.kind === 'crowd') return l.seq > 0 ? `LOT ${String(l.seq).padStart(2, '0')}` : 'CROWD QUESTION';
+  if (l.kind === 'practice') return `PRACTICE ${l.seq}`;
   return `LOT ${String(l.seq).padStart(2, '0')}`;
 }
 
@@ -69,37 +77,16 @@ function lotFrom(q: Question | undefined, round: Lot['round'], seq: number, base
   };
 }
 
-export interface Plan {
-  practice: string;
-  r1: readonly (readonly [string, number, number, string])[];
-  r2: readonly (readonly [string, number, number, string])[];
-  r3: readonly (readonly [string, number, number, string])[];
-  vaults: readonly number[];
-  vaultQuestion: string;
-  jackpot: string;
-}
-
 export function shuffle<T>(a: T[], rnd = Math.random): T[] {
   const b = a.slice();
   for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [b[i], b[j]] = [b[j]!, b[i]!]; }
   return b;
 }
 
-export function newEvent(code: string, bank: Question[], plan: Plan, cfg: Partial<Config> = {}): HostState {
+/** A new event: no lots yet. Each lot is created when the host starts the next question. */
+export function newEvent(code: string, bank: Question[], cfg: Partial<Config> = {}): HostState {
   const config = { ...DEFAULT_CONFIG, ...cfg };
-  const q = (qid: string) => bank.find((x) => x.id === qid);
   const lots: Lot[] = [];
-  lots.push({ ...lotFrom(q(plan.practice), 0, 1, 50, 100, 'open', 'practice'), mode: 'physical' });
-  ([['r1', 1], ['r2', 2], ['r3', 3]] as const).forEach(([k, r]) => plan[k].forEach(([qid, base, reward, part], i) => lots.push(lotFrom(q(qid), r, i + 1, base, reward, part as Participation))));
-  // Vault contents are shuffled once, now, and kept on the host only.
-  const contents = shuffle(config.vaultPool.slice(0, plan.vaults.length));
-  plan.vaults.forEach((base, i) => lots.push({
-    ...lotFrom(undefined, 4, i + 1, base, 0, 'exclusive', 'vault'),
-    title: `Vault ${String.fromCharCode(65 + i)}`, category: 'Mystery', difficulty: '?',
-    vault: contents[i] ?? { kind: 'trap', value: 0, title: 'Mystery Trap', text: 'The vault is empty.' },
-    questionId: contents[i]?.kind === 'double' ? plan.vaultQuestion : null,
-  }));
-  lots.push({ ...lotFrom(q(plan.jackpot), 4, 5, 0, config.jackpotReward, 'open', 'jackpot'), title: 'Final Jackpot' });
   const teams: Record<string, TeamRec> = {};
   for (const no of config.teamNos) teams[no] = { no, members: null, regAt: null, eligible: true };
   return {
@@ -263,9 +250,46 @@ export function canStartLot(s: HostState, now: number) {
     const l = curLot(s)!;
     if (!['done', 'skipped'].includes(l.status)) return 'Finish the current lot first.';
   }
-  const sch = scheduleStatus(s, now);
-  if (s.stage === 'live' && sch.overDeadline && !s.overtime) return 'The 60-minute deadline has passed. Finish up, or allow overtime.';
+  void now;
   return null;
+}
+
+/** Questions not used by any lot yet (optionally only one difficulty). */
+export function unusedQuestions(s: HostState, difficulty: 'any' | Question['difficulty'] = 'any') {
+  const used = new Set(s.lots.map((l) => l.questionId).filter(Boolean));
+  return s.bank.filter((q) => q.active && !used.has(q.id) && (difficulty === 'any' || q.difficulty === difficulty));
+}
+
+/**
+ * Put the next question up for auction straight away. A random unused question is used
+ * (avoiding the same topic twice in a row) unless the host picked one.
+ */
+export function nextQuestion(s: HostState, now: number, opts: { qid?: string; difficulty?: 'any' | Question['difficulty']; mode?: 'physical' | 'mobile' } = {}, rnd = Math.random) {
+  const why = canStartLot(s, now);
+  if (why) fail(why);
+  if (s.stage !== 'live' && s.stage !== 'practice') fail('Start the practice or the event first.');
+  const practice = s.stage === 'practice';
+  let q: Question | undefined;
+  if (opts.qid) {
+    q = unusedQuestions(s).find((x) => x.id === opts.qid) ?? fail('That question has already been used (or is archived).');
+  } else {
+    const pool = unusedQuestions(s, opts.difficulty ?? 'any');
+    if (!pool.length) fail(opts.difficulty && opts.difficulty !== 'any' ? `No unused ${opts.difficulty} questions left. Choose "Any" or add more under Questions.` : 'No unused questions left. Add or import more under Questions.');
+    const lastQ = question(s, [...s.lots].reverse().find((l) => l.questionId)?.questionId ?? null);
+    const fresh = pool.filter((x) => x.group !== lastQ?.group);
+    q = shuffle(fresh.length ? fresh : pool, rnd)[0]!;
+  }
+  const lv = levelOf(s.cfg, q!.difficulty);
+  const seq = s.lots.filter((l) => l.practice === practice).reduce((m, l) => Math.max(m, l.seq), 0) + 1;
+  const lot: Lot = { ...lotFrom(q, practice ? 0 : 1, seq, lv.base, lv.reward, 'steal', practice ? 'practice' : 'question'), mode: opts.mode ?? s.cfg.bidMode ?? 'physical' };
+  return mut(s, (d) => {
+    const prev = curLot(d);
+    if (prev && prev.status === 'results') prev.status = 'done';
+    if (prev && prev.status === 'unsold') prev.status = 'skipped';
+    lot.status = 'auction';
+    d.lots.push(lot);
+    d.cur = { lotId: lot.id, deadline: now + d.cfg.auctionSec * 1000, high: null, verbal: null, win: null, shownAt: now };
+  }, ['Auction started', `${lotLabel(lot)} ${q!.title} (${q!.difficulty})`]);
 }
 
 export function startLot(s: HostState, lotId: string, now: number) {
@@ -394,7 +418,7 @@ export function unsoldToCrowd(s: HostState, now: number) {
     l.kind = l.kind === 'practice' ? 'practice' : 'crowd';
     l.owner = null;
     l.participation = 'open';
-    l.reward = Math.max(10, Math.floor(l.reward * d.cfg.share));
+    l.reward = Math.max(10, Math.floor(l.reward * d.cfg.stealShare));
     openWindow(d, l, now, 1, 'all', l.reward);
   }, ['Unsold lot became a crowd question', lotLabel(curLot(s)!)]);
 }
@@ -473,15 +497,15 @@ export function closeWindow(s: HostState, winId: string, answers: Record<string,
         for (const a of right) if (a.team !== w.owner && other > 0) scores.push({ team: a.team, pts: other, role: 'other' });
       }
       if (l.participation === 'steal' && !ownerCorrect) {
-        // The owner missed: open the steal window. Nobody learns the answer yet.
+        // The winning team missed: open the question to everyone else. Nobody learns the answer yet.
         l.result = { answer: '', explain: '', ownerCorrect: false, scores: [], submitted: valid.length, correct: 0, stealTried: true };
         openWindow(d, l, now, 2, 'others', Math.floor(l.reward * d.cfg.stealShare));
-        d.audit.unshift({ at: Date.now(), action: 'Steal window opened', detail: lotLabel(l) });
+        d.audit.unshift({ at: Date.now(), action: 'Opened to everyone', detail: lotLabel(l) });
         return;
       }
     } else {
-      const first = right[0];
-      if (first) scores.push({ team: first.team, pts: w.reward, role: 'steal' });
+      // The winning team missed: every other team that answered correctly scores.
+      for (const a of right) scores.push({ team: a.team, pts: w.reward, role: 'steal' });
     }
     for (const sc of scores) ledger(d, sc.team, 0, sc.pts, `${sc.role === 'steal' ? 'Steal' : 'Correct answer'}: ${lotLabel(l)}`, l.id, l.practice);
     l.result = {
@@ -717,7 +741,8 @@ export function buildPub(s: HostState, answeredCount = 0): Pub {
   let lot: PubLot | null = null;
   if (l && c) {
     const sold = l.owner !== null;
-    const hideReward = l.kind === 'vault' || (l.round === 2 && !sold && l.kind === 'question');
+    const hideReward = l.kind === 'vault';
+    void sold;
     lot = {
       id: l.id, round: l.round, seq: l.seq, kind: l.kind, mode: l.mode, status: l.status,
       label: lotLabel(l), title: l.title, category: l.category, difficulty: l.difficulty, base: l.base,
@@ -756,7 +781,7 @@ export function buildPub(s: HostState, answeredCount = 0): Pub {
     allowed: s.cfg.teamNos.filter((no) => s.teams[no]?.eligible),
     registered: registeredTeams(s).map((t) => t.no),
     clockStart: s.clockStart, liveStart: s.liveStart, schedule: s.cfg.schedule,
-    round, roundName: ROUND_META[round]?.name ?? '',
+    round, roundName: '',
     cfg: { purse: s.cfg.purse, inc: s.cfg.inc, answerSec: Math.min(MAX_ANSWER_SEC, s.cfg.answerSec), auctionSec: s.cfg.auctionSec, share: s.cfg.share, stealShare: s.cfg.stealShare, conv: s.cfg.conv, sound: s.cfg.sound },
     lot, q, res,
     board: boardVisible(s) && s.stage !== 'registration' ? standings(s) : null,
@@ -789,8 +814,8 @@ export const exportResultsCSV = (s: HostState) => {
   const esc = (v: unknown) => { const x = String(v ?? ''); return /[",\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; };
   const rows: unknown[][] = [['Rank', 'Team', 'Members', 'Points', 'Purse left (lakh)', 'Cash points', 'Final points']];
   for (const r of finalRows(s)) rows.push([r.rank, r.team, r.members.join(' / '), r.points, r.purse, r.cashPts, r.final]);
-  rows.push([], ['Lot', 'Round', 'Title', 'Status', 'Team', 'Price (lakh)', 'Points awarded']);
-  for (const l of s.lots.filter((x) => !x.practice)) rows.push([lotLabel(l), l.round, l.title, l.status, l.owner ?? '', l.price ?? '', (l.result?.scores ?? []).map((x) => `T${x.team}:+${x.pts}`).join(' ')]);
+  rows.push([], ['Lot', 'Question', 'Difficulty', 'Status', 'Team', 'Price (lakh)', 'Points awarded']);
+  for (const l of s.lots.filter((x) => !x.practice)) rows.push([lotLabel(l), l.title, l.difficulty, l.status, l.owner ?? '', l.price ?? '', (l.result?.scores ?? []).map((x) => `T${x.team}:+${x.pts}`).join(' ')]);
   rows.push([], ['Time', 'Team', 'Purse change (lakh)', 'Points change', 'Reason']);
   for (const e of s.ledger.filter(live)) rows.push([new Date(e.at).toISOString(), e.team, e.purse, e.points, e.reason]);
   rows.push([], ['Time', 'Audit action', 'Detail']);

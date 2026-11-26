@@ -46,7 +46,7 @@ export function HostHome() {
                 <Field label="Date"><input id="ev-date" type="date" className="field" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
                 <Field label="Teams"><input id="ev-teams" type="number" min={2} max={80} className="field !w-24 num" value={teams} onChange={(e) => setTeams(e.target.value)} /></Field>
               </div>
-              <p className="mt-3 text-sm text-dim">Defaults: 4 players and one phone per team, ₹10 Cr purse, 19 lots in four rounds plus a final jackpot, 60 minutes. You can change everything before the event starts.</p>
+              <p className="mt-3 text-sm text-dim">Defaults: 4 players and one phone per team, ₹10 Cr purse, one continuous auction with 136 medium and hard questions. You finish whenever you like. You can change everything before the event starts.</p>
               <Btn variant="primary" size="lg" className="mt-5" disabled={busy} onClick={create}>{busy ? 'Creating…' : 'Create event'}</Btn>
             </section>
 

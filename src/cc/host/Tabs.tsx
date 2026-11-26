@@ -109,78 +109,32 @@ function parseRanges(t: string): number[] | null {
 // =====================================================================================================
 export function LotsTab() {
   const { s, act } = useHost();
-  const [peek, setPeek] = useState(false);
-  const rounds = [1, 2, 3, 4];
-  const used = useMemo(() => new Map(s.lots.filter((l) => l.questionId && l.status !== 'skipped').map((l) => [l.questionId!, l])), [s]);
-  const active = s.bank.filter((q) => q.active);
+  const lots = s.lots.filter((l) => !l.practice).slice().reverse();
   return (
-    <div className="flex flex-col gap-4">
-      <div className="panel flex flex-wrap items-center gap-3 p-4">
-        <p className="min-w-0 flex-1 text-sm text-muted">{s.lots.filter((l) => !l.practice && l.kind === 'question' && l.status !== 'skipped').length} auction lots + 4 vaults + the final jackpot. Each lot takes about 1½ minutes; add or remove lots to fit your time. Played lots are locked.</p>
-        <Btn variant="outline" onClick={async () => { if (await confirmDialog('Pick new random questions?', 'Every lot that has not been played gets a fresh, unused question.', 'Randomise', false)) act((x) => E.randomizeQuestions(x), 'Questions randomised.'); }}>🎲 Randomise questions</Btn>
+    <div className="panel overflow-x-auto scroll-thin">
+      <div className="flex items-center gap-3 border-b border-line px-4 py-3">
+        <h3 className="font-[family-name:var(--font-display)] text-xl font-bold uppercase">Questions played</h3>
+        <span className="text-sm text-muted">{lots.length} so far · {E.unusedQuestions(s).length} unused left in the bank</span>
       </div>
-      {rounds.map((r) => {
-        const m = E.ROUND_META[r]!;
-        const lots = s.lots.filter((l) => l.round === r && !l.practice && l.kind !== 'crowd').sort((a, b) => (a.kind === 'jackpot' ? 1 : 0) - (b.kind === 'jackpot' ? 1 : 0) || a.seq - b.seq);
-        return (
-          <div key={r} className="panel overflow-x-auto scroll-thin">
-            <div className="flex items-center gap-3 border-b border-line px-4 py-3" style={{ background: `linear-gradient(90deg, ${m.color}20, transparent)` }}>
-              <h3 className="font-[family-name:var(--font-display)] text-xl font-bold uppercase" style={{ color: m.color }}>Round {r} · {m.name}</h3>
-              <span className="text-sm text-muted">{s.cfg.schedule[r + 1]} min · {m.tag}</span>
-              {r < 4 && <span className="text-sm text-muted">· {lots.filter((l) => l.status !== 'skipped').length} lots</span>}
-              {r < 4 && <Btn size="xs" variant="outline" className="ml-auto" onClick={() => act((x) => E.addLot(x, r as 1 | 2 | 3), 'Lot added with an unused question.')}>＋ Add lot</Btn>}
-              {r === 4 && <Btn size="xs" variant="ghost" className="ml-auto" onClick={() => { setPeek((x) => !x); if (!peek) act((x) => ({ ...x, audit: [{ at: Date.now(), action: 'Host viewed vault contents', detail: '' }, ...x.audit], rev: x.rev + 1 })); }}>{peek ? 'Hide' : 'Peek at'} vault contents</Btn>}
-            </div>
-            <table className="w-full min-w-[980px] text-sm">
-              <thead><tr className="label text-left"><th className="p-2 pl-4">Lot</th><th className="p-2">Question</th><th className="p-2">Base (lakh)</th><th className="p-2">Reward</th><th className="p-2">Answering</th><th className="p-2">Bidding</th><th className="p-2">Status</th><th className="p-2" /></tr></thead>
-              <tbody>
-                {lots.map((l) => <LotRow key={l.id} l={l} s={s} used={used} active={active} peek={peek} />)}
-              </tbody>
-            </table>
-          </div>
-        );
-      })}
+      <table className="w-full min-w-[860px] text-sm">
+        <thead><tr className="label text-left"><th className="p-2 pl-4">Lot</th><th className="p-2">Question</th><th className="p-2">Level</th><th className="p-2">Status</th><th className="p-2">Bought by</th><th className="p-2 text-right">Price</th><th className="p-2">Points</th></tr></thead>
+        <tbody>
+          {lots.length === 0 && <tr><td colSpan={7} className="p-4 text-muted">Nothing played yet. Press NEXT QUESTION on Live control.</td></tr>}
+          {lots.map((l) => (
+            <tr key={l.id} className="border-t border-line/50">
+              <td className="p-2 pl-4 font-[family-name:var(--font-display)] font-bold whitespace-nowrap">{E.lotLabel(l)}</td>
+              <td className="p-2">{l.title} <span className="text-dim">· {l.category}</span></td>
+              <td className="p-2">{l.difficulty}</td>
+              <td className="p-2 capitalize">{l.status === 'skipped' ? 'unsold' : l.status}{l.result?.stealTried ? ' · opened to all' : ''}</td>
+              <td className="p-2">{l.owner ? `Team ${l.owner}` : '—'}</td>
+              <td className="p-2 text-right num">{l.price ? E.money(l.price) : ''}</td>
+              <td className="p-2">{(l.result?.scores ?? []).map((x) => `T${x.team} +${x.pts}`).join(', ')}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <span className="hidden">{String(!!act)}</span>
     </div>
-  );
-}
-
-function LotRow({ l, s, used, active, peek }: { l: Lot; s: HostState; used: Map<string, Lot>; active: Question[]; peek: boolean }) {
-  const { act } = useHost();
-  const locked = l.status !== 'pending';
-  const needsQ = l.kind === 'question' || l.kind === 'jackpot' || (l.kind === 'vault' && l.vault?.kind === 'double');
-  return (
-    <tr className={cx('border-t border-line/50', l.status === 'skipped' && 'opacity-50')}>
-      <td className="p-2 pl-4 font-[family-name:var(--font-display)] font-bold whitespace-nowrap">{E.lotLabel(l)}</td>
-      <td className="p-2">
-        {l.kind === 'vault' && <div className="mb-1 text-xs">{peek ? <b style={{ color: '#ff4fd8' }}>{l.vault?.title}</b> : <span className="text-dim">Sealed</span>}</div>}
-        {needsQ && (!(l.kind === 'vault') || peek) ? (
-          <select aria-label="Question" className="field !py-1.5 text-sm" disabled={locked} value={l.questionId ?? ''} onChange={(e) => act((x) => E.editLot(x, l.id, { questionId: e.target.value }))}>
-            {!l.questionId && <option value="">Choose…</option>}
-            {active.map((q) => { const u = used.get(q.id); return <option key={q.id} value={q.id} disabled={!!u && u.id !== l.id}>{q.id} · {q.title} ({q.category}){u && u.id !== l.id ? ` (used ${E.lotLabel(u)})` : ''}</option>; })}
-          </select>
-        ) : l.kind !== 'vault' ? <span className="text-dim">—</span> : null}
-      </td>
-      <td className="p-2">{l.kind === 'jackpot' ? <span className="text-dim">free</span> : <input aria-label="Base price" className="field !w-24 !py-1.5 num" type="number" min={10} step={5} disabled={locked} value={l.base} onChange={(e) => act((x) => E.editLot(x, l.id, { base: Math.max(1, Math.round(Number(e.target.value))) }))} />}</td>
-      <td className="p-2">{l.kind === 'vault' ? <span className="text-dim">in vault</span> : <input aria-label="Reward" className="field !w-24 !py-1.5 num" type="number" min={0} step={10} disabled={locked} value={l.reward} onChange={(e) => act((x) => E.editLot(x, l.id, { reward: Math.max(0, Math.round(Number(e.target.value))) }))} />}</td>
-      <td className="p-2">{l.kind === 'question' ? (
-        <select aria-label="Participation" className="field !w-36 !py-1.5" disabled={locked} value={l.participation} onChange={(e) => act((x) => E.editLot(x, l.id, { participation: e.target.value as Participation }))}>
-          <option value="open">Open</option><option value="exclusive">Exclusive</option><option value="steal">Steal</option>
-        </select>) : l.kind === 'jackpot' ? <Partic p="all" /> : <span className="text-dim">owner</span>}</td>
-      <td className="p-2">{l.kind === 'jackpot' ? <span className="text-dim">none</span> : (
-        <select aria-label="Bidding mode" className="field !w-32 !py-1.5" disabled={locked || l.kind === 'vault'} value={l.mode} onChange={(e) => act((x) => E.editLot(x, l.id, { mode: e.target.value as Lot['mode'] }))}>
-          <option value="physical">Physical</option><option value="mobile">Phones</option>
-        </select>)}</td>
-      <td className="p-2 capitalize">{l.status}{l.owner ? ` · T${l.owner}` : ''}{l.price ? ` · ${E.money(l.price)}` : ''}</td>
-      <td className="p-2">
-        <div className="flex justify-end gap-1">
-          {l.kind !== 'jackpot' && <><Btn size="xs" variant="ghost" disabled={locked} onClick={() => act((x) => E.moveLot(x, l.id, -1))} aria-label="Move up">↑</Btn><Btn size="xs" variant="ghost" disabled={locked} onClick={() => act((x) => E.moveLot(x, l.id, 1))} aria-label="Move down">↓</Btn></>}
-          {l.status === 'pending' && l.kind !== 'jackpot' && <Btn size="xs" variant="ghost" onClick={() => act((x) => E.skipLot(x, l.id))}>Skip</Btn>}
-          {l.status === 'skipped' && l.owner === null && <Btn size="xs" variant="ghost" onClick={() => act((x) => E.unskipLot(x, l.id))}>Restore</Btn>}
-          {l.kind === 'question' && (l.status === 'pending' || l.status === 'skipped') && l.owner === null && <Btn size="xs" variant="ghost" className="hover:!text-live" onClick={async () => { if (await confirmDialog(`Remove ${E.lotLabel(l)}?`, 'The lot is deleted and its question goes back to the bank.', 'Remove')) act((x) => E.removeLot(x, l.id)); }}>Remove</Btn>}
-        </div>
-      </td>
-      <td className="hidden">{s.rev}</td>
-    </tr>
   );
 }
 
@@ -373,7 +327,6 @@ export function SettingsTab() {
   const locked = s.stage !== 'registration';
   const set = (patch: Partial<Config>) => act((x) => E.configure(x, patch));
   const num = (v: string, min: number, max: number) => Math.max(min, Math.min(max, Math.round(Number(v) || 0)));
-  const partNames = ['Registration', 'Rules & practice', 'Round 1', 'Round 2', 'Round 3', 'Round 4', 'Results'];
   const restore = useRef<HTMLInputElement>(null);
   return (
     <div className="grid gap-4 xl:grid-cols-2">
@@ -386,11 +339,12 @@ export function SettingsTab() {
           <Field label="Minimum bid increment (lakh)"><input id="set-inc" className="field num" type="number" value={c.inc} onChange={(e) => set({ inc: num(e.target.value, 1, 1000) })} /></Field>
           <Field label="Auction timer (seconds)"><input id="set-auction" className="field num" type="number" value={c.auctionSec} onChange={(e) => set({ auctionSec: num(e.target.value, 5, 300) })} /></Field>
           <Field label="Answer timer (seconds, max 10)"><input id="set-answer" className="field num" type="number" max={10} value={c.answerSec} onChange={(e) => set({ answerSec: num(e.target.value, 3, 10) })} /></Field>
-          <Field label="Open: share for other correct teams (%)"><input id="set-share" className="field num" type="number" value={Math.round(c.share * 100)} onChange={(e) => set({ share: num(e.target.value, 0, 100) / 100 })} /></Field>
-          <Field label="Steal reward (% of full)"><input id="set-steal" className="field num" type="number" value={Math.round(c.stealShare * 100)} onChange={(e) => set({ stealShare: num(e.target.value, 0, 100) / 100 })} /></Field>
+          <Field label="If the winner is wrong: other correct teams get (% of reward)"><input id="set-steal" className="field num" type="number" value={Math.round(c.stealShare * 100)} onChange={(e) => set({ stealShare: num(e.target.value, 0, 100) / 100 })} /></Field>
+          <Field label="Default bidding">
+            <select id="set-bidmode" className="field" value={c.bidMode ?? 'physical'} onChange={(e) => set({ bidMode: e.target.value as 'physical' | 'mobile' })}><option value="physical">Out loud (host enters the winner)</option><option value="mobile">On team phones</option></select>
+          </Field>
           <Field label="Points per ₹1 Cr left at the end"><input id="set-conv" className="field num" type="number" value={c.conv} onChange={(e) => set({ conv: num(e.target.value, 0, 1000) })} /></Field>
-          <Field label="Crowd question reward"><input id="set-crowd" className="field num" type="number" value={c.crowdReward} onChange={(e) => set({ crowdReward: num(e.target.value, 0, 1000) })} /></Field>
-          <Field label="Final jackpot reward"><input id="set-jackpot" className="field num" type="number" value={c.jackpotReward} onChange={(e) => { const v = num(e.target.value, 0, 5000); act((x) => { const y = E.configure(x, { jackpotReward: v }); const jl = y.lots.find((l) => l.kind === 'jackpot'); return jl && jl.status === 'pending' ? E.editLot(y, jl.id, { reward: v }) : y; }); }} /></Field>
+          <Field label="Planned length (minutes, for the timer)"><input id="set-minutes" className="field num" type="number" value={E.EVENT_MINUTES(c)} onChange={(e) => set({ schedule: [num(e.target.value, 10, 600)] })} /></Field>
           <Field label="Practice purse (lakh)"><input id="set-ppurse" className="field num" type="number" value={c.practicePurse} onChange={(e) => set({ practicePurse: num(e.target.value, 100, 100000) })} /></Field>
           <Field label="Leaderboard on the projector">
             <select id="set-board" className="field" value={c.board} onChange={(e) => set({ board: e.target.value as Config['board'] })}><option value="always">Always</option><option value="between">Between lots only</option><option value="hidden">Hidden until the end</option></select>
@@ -400,9 +354,21 @@ export function SettingsTab() {
             <label className="flex items-center gap-2"><input id="set-sound" type="checkbox" checked={c.sound} onChange={(e) => set({ sound: e.target.checked })} className="h-4 w-4" /> Sound effects on the projector</label>
           </div>
         </div>
-        <Label className="mb-2 mt-5">Schedule (minutes) · total {E.EVENT_MINUTES(c)}</Label>
-        <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
-          {c.schedule.map((m, i) => <Field key={i} label={partNames[i]!}><input aria-label={partNames[i]} className="field num" type="number" value={m} onChange={(e) => set({ schedule: c.schedule.map((x, j) => (j === i ? num(e.target.value, 0, 60) : x)) })} /></Field>)}
+        <Label className="mb-2 mt-5">Price and reward by difficulty (applies to the next questions)</Label>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {(['Medium', 'Hard'] as const).map((d) => {
+            const lv = E.levelOf(c, d);
+            const setLv = (patch: Partial<{ base: number; reward: number }>) => set({ levels: { ...(c.levels ?? E.DEFAULT_CONFIG.levels!), [d]: { ...lv, ...patch } } });
+            return (
+              <div key={d} className="rounded-xl border border-line p-3">
+                <div className="mb-2 font-bold">{d}</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="Base price (lakh)"><input id={`set-${d}-base`} className="field num" type="number" value={lv.base} onChange={(e) => setLv({ base: num(e.target.value, 1, 10000) })} /></Field>
+                  <Field label="Reward (points)"><input id={`set-${d}-reward`} className="field num" type="number" value={lv.reward} onChange={(e) => setLv({ reward: num(e.target.value, 0, 10000) })} /></Field>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 

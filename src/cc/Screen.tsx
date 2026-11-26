@@ -4,7 +4,7 @@ import type { Pub, PubLot, PubRow } from './types';
 import { normPub } from './types';
 import { ccConfigured, joinLink, listen, P, signIn, startServerClock, useConnected, useServerNow } from './fb';
 import * as E from './engine';
-import { clock, CodeBlock, Countdown, Partic, QR, RoundChip, TeamBadge } from './ui';
+import { clock, CodeBlock, Countdown, DiffChip, QR, TeamBadge } from './ui';
 import { cx } from '../components/ui';
 import { confetti, ConfettiLayer } from '../components/Confetti';
 import { play, unlockAudio, type Sfx } from '../lib/sound';
@@ -87,7 +87,7 @@ function TopBar({ pub, code, connected }: { pub: Pub; code: string; connected: b
         <div className="font-[family-name:var(--font-display)] text-[clamp(20px,2.4vw,44px)] font-bold uppercase tracking-wide"><span className="cyan-text">BID WARS 2.0</span></div>
         <div className="label mt-1 text-[clamp(10px,.9vw,15px)]">Code &amp; Chaos{pub.name ? ` · ${pub.name}` : ''}</div>
       </div>
-      {pub.stage !== 'registration' && pub.stage !== 'final' && <RoundChip round={pub.practice ? 0 : pub.round} className="text-[clamp(12px,1.2vw,20px)]" />}
+      {pub.stage !== 'registration' && pub.stage !== 'final' && <span className="rounded-full border border-info/40 bg-info/10 px-3 py-1 font-[family-name:var(--font-display)] text-[clamp(12px,1.2vw,20px)] font-bold uppercase tracking-widest text-info">{pub.practice ? 'Practice' : 'Live auction'}</span>}
       <div className="ml-auto flex items-center gap-[1.5vw]">
         {pub.stage !== 'registration' && <span className="label text-[clamp(10px,.9vw,15px)]">Join code <b className="text-info">{code}</b></span>}
         {pub.clockStart && <span className="rounded-xl border border-line bg-panel/60 px-3 py-1 font-[family-name:var(--font-display)] text-[clamp(16px,1.6vw,30px)] font-bold num">{clock(now - pub.clockStart)}<span className="text-dim text-[.6em]"> / {total}:00</span></span>}
@@ -138,7 +138,7 @@ function Lobby({ pub, code }: { pub: Pub; code: string }) {
 
 // ------------------------------------------------------------------------------------------- lot
 function LotStage({ pub, l }: { pub: Pub; l: PubLot }) {
-  const color = E.ROUND_META[l.round]?.color ?? '#22e3ff';
+  const color = l.difficulty === 'Hard' ? '#ff5470' : '#22e3ff';
   return (
     <div className="grid min-h-0 flex-1 gap-[2vw] xl:grid-cols-[minmax(0,1fr)_minmax(260px,24vw)]">
       <section className="panel relative flex min-h-0 flex-col overflow-hidden p-[2.5vw]" style={{ boxShadow: `0 0 0 1px ${color}55, 0 0 80px ${color}22` }}>
@@ -147,7 +147,7 @@ function LotStage({ pub, l }: { pub: Pub; l: PubLot }) {
           <span className="font-[family-name:var(--font-display)] text-[clamp(18px,1.8vw,34px)] font-bold" style={{ color }}>{l.label}</span>
           {l.practice && <span className="rounded bg-panel-2 px-2 py-0.5 text-sm font-bold">PRACTICE · dummy money</span>}
           {l.category && <span className="label text-[clamp(10px,1vw,16px)]">{l.category}</span>}
-          {(l.kind === 'question' || l.kind === 'practice' || l.kind === 'crowd' || l.kind === 'jackpot') && <Partic p={l.participation} />}
+          {l.difficulty && <DiffChip d={l.difficulty} className="text-[clamp(11px,1vw,16px)]" />}
         </div>
         <h2 key={l.id} className="mt-[1vh] font-[family-name:var(--font-display)] text-[clamp(34px,5vw,96px)] font-bold uppercase leading-[.95] animate-rise">{l.kind === 'vault' ? `Mystery vault ${l.seq}` : l.title}</h2>
         <div className="flex min-h-0 flex-1 flex-col justify-center py-[2vh]">
@@ -214,7 +214,7 @@ function Phase({ pub, l }: { pub: Pub; l: PubLot }) {
         <div className="mt-[2vh] flex items-center justify-center gap-[1.5vw] text-[clamp(24px,3vw,56px)] font-bold">
           <span className="text-muted">to</span><TeamBadge no={l.owner} size="xl" /><span className="num">{E.money(l.price ?? 0)}</span>
         </div>
-        {l.reward !== null && l.kind !== 'vault' && <p className="mt-2 text-[clamp(16px,1.6vw,30px)] text-muted">Worth <b className="text-fg">{l.reward} pts</b> if they get it right</p>}
+        {l.reward !== null && l.kind !== 'vault' && <p className="mt-2 text-[clamp(16px,1.6vw,30px)] text-muted">Team {l.owner} answers for <b className="text-fg">{l.reward} pts</b>. Miss it and it opens to everyone!</p>}
         {l.kind === 'vault' && <div className="mx-auto mt-[2vh] max-w-[40vh]"><VaultDoor /></div>}
       </div>
     );
@@ -252,10 +252,10 @@ function VaultDoor({ open }: { open?: boolean }) {
 
 function QuestionView({ pub }: { pub: Pub }) {
   const q = pub.q!;
-  const who = q.elig === 'all' ? (q.owner ? `All teams answer · Team ${q.owner} gets ${q.reward} pts, others ${Math.floor(q.reward * pub.cfg.share)}` : `All teams answer · ${q.reward} pts each`) : q.elig === 'owner' ? `Only Team ${q.owner} answers · ${q.reward} pts` : `STEAL! Everyone except Team ${q.owner} · first correct gets ${q.reward} pts`;
+  const who = q.elig === 'all' ? `All teams answer · ${q.reward} pts for each correct team` : q.elig === 'owner' ? `Only Team ${q.owner} answers · ${q.reward} pts` : `Team ${q.owner} missed it! OPEN TO EVERYONE · ${q.reward} pts for each correct team`;
   return (
     <div className="grid items-start gap-[3vw] lg:grid-cols-[auto_1fr]">
-      <Countdown deadline={q.deadline} total={pub.cfg.answerSec} size={Math.min(280, Math.max(140, window.innerHeight * 0.26))} label={q.n === 2 ? 'STEAL' : 'ANSWER'} />
+      <Countdown deadline={q.deadline} total={pub.cfg.answerSec} size={Math.min(280, Math.max(140, window.innerHeight * 0.26))} label={q.n === 2 ? 'EVERYONE' : 'ANSWER'} />
       <div className="min-w-0">
         <div className={cx('inline-block rounded-xl px-[1vw] py-[.6vh] text-[clamp(14px,1.4vw,26px)] font-bold', q.n === 2 ? 'bg-live/20 text-live animate-blink' : 'bg-info/15 text-info')}>{who}</div>
         <p key={q.win} className="mt-[1.5vh] text-[clamp(24px,3vw,58px)] font-semibold leading-tight animate-rise">{q.prompt}</p>
@@ -293,7 +293,7 @@ function ResultView({ pub, l }: { pub: Pub; l: PubLot }) {
         <div className="mt-[1vh] flex flex-wrap gap-[.6vw]">
           {r.scores.length === 0 && <p className="text-[clamp(18px,2vw,36px)] text-muted">Nobody scored this time.</p>}
           {r.scores.slice(0, 40).map((x, i) => (
-            <span key={x.team + x.role} className="rounded-xl border border-ok/40 bg-ok/10 px-[.8vw] py-[.6vh] text-[clamp(16px,1.6vw,30px)] font-bold animate-rise" style={{ animationDelay: `${Math.min(i, 20) * 40}ms` }}>T{x.team} <span className="text-ok">+{x.pts}</span>{x.role === 'steal' && <span className="text-live"> STEAL</span>}</span>
+            <span key={x.team + x.role} className="rounded-xl border border-ok/40 bg-ok/10 px-[.8vw] py-[.6vh] text-[clamp(16px,1.6vw,30px)] font-bold animate-rise" style={{ animationDelay: `${Math.min(i, 20) * 40}ms` }}>T{x.team} <span className="text-ok">+{x.pts}</span>{x.role === 'owner' && <span className="text-gold"> WINNER</span>}</span>
           ))}
         </div>
       </div>
@@ -329,13 +329,13 @@ function MiniBoard({ rows, big }: { rows: PubRow[] | null; big?: boolean }) {
 }
 
 function Between({ pub }: { pub: Pub }) {
-  const m = E.ROUND_META[pub.practice ? 0 : pub.round];
+  const m = { color: '#22e3ff' };
   return (
     <div className="grid min-h-0 flex-1 gap-[2vw] xl:grid-cols-[minmax(0,1fr)_minmax(320px,32vw)]">
       <section className="panel flex flex-col justify-center p-[3vw]" style={{ boxShadow: m ? `0 0 0 1px ${m.color}44, 0 0 80px ${m.color}18` : undefined }}>
-        <div className="label text-[clamp(12px,1.2vw,22px)]" style={{ color: m?.color }}>{pub.practice ? 'Practice auction' : pub.round ? `Round ${pub.round}` : 'Get ready'}</div>
-        <h2 className="mt-1 font-[family-name:var(--font-display)] text-[clamp(44px,7vw,140px)] font-bold uppercase leading-[.9]" style={{ color: m?.color }}>{pub.practice ? 'Warm-up' : m?.name ?? 'Code & Chaos'}</h2>
-        {m && !pub.practice && <p className="mt-2 text-[clamp(18px,2vw,36px)] text-muted">{m.tag}</p>}
+        <div className="label text-[clamp(12px,1.2vw,22px)]" style={{ color: m.color }}>{pub.practice ? 'Practice auction · dummy money' : 'Live auction'}</div>
+        <h2 className="mt-1 font-[family-name:var(--font-display)] text-[clamp(44px,7vw,140px)] font-bold uppercase leading-[.9] cyan-text">Next question coming up</h2>
+        <p className="mt-2 text-[clamp(18px,2vw,36px)] text-muted">Bid to win the question. Answer right for the points; miss it and every other team gets a shot.</p>
         {pub.history.length > 0 && (
           <div className="mt-[4vh]">
             <div className="label mb-[1vh] text-[clamp(11px,1vw,17px)]">Recent lots</div>

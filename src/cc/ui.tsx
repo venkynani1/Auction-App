@@ -81,3 +81,9 @@ export function clock(ms: number) {
   const s = Math.max(0, Math.floor(ms / 1000));
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
+
+/** Medium / Hard badge for a question. */
+export function DiffChip({ d, className = '' }: { d: string; className?: string }) {
+  const hard = d === 'Hard';
+  return <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-bold uppercase tracking-widest ${hard ? 'bg-live/20 text-live' : 'bg-gold/15 text-gold'} ${className}`}>{d === 'Hard' ? '🔥 Hard' : d}</span>;
+}

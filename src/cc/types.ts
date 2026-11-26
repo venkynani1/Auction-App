@@ -107,6 +107,10 @@ export interface Config {
   jackpotReward: number;
   vaultPool: VaultContent[];
   regCode: string;            // optional code teams must type to register ('' = none)
+  /** base price (lakhs) and reward (points) by question difficulty */
+  levels?: Record<'Easy' | 'Medium' | 'Hard', { base: number; reward: number }>;
+  /** how teams bid on each question by default: out loud (host enters the result) or on their phones */
+  bidMode?: 'physical' | 'mobile';
 }
 
 export type Stage = 'registration' | 'practice' | 'live' | 'final';

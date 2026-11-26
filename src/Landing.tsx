@@ -42,7 +42,7 @@ export function Landing() {
             <div className="relative">
               <div className="font-[family-name:var(--font-cond)] text-sm font-bold uppercase tracking-[.3em] text-[#22e3ff]">Game 02 · New</div>
               <h2 className="mt-2 font-[family-name:var(--font-display)] text-[clamp(40px,5vw,76px)] font-bold uppercase leading-[.9]"><span className="cyan-text">Code</span> <span className="text-[#ffc83d]">&amp;</span><br /><span className="cyan-text">Chaos</span></h2>
-              <p className="mt-3 max-w-md text-lg text-[#b9cbec]">The ultimate tech &amp; entertainment auction. Win lots, answer in 10 seconds, bid from your phone and crack the mystery vaults.</p>
+              <p className="mt-3 max-w-md text-lg text-[#b9cbec]">The ultimate tech &amp; entertainment auction. Bid for a question, answer it in 10 seconds, and if you miss it, every other team gets a shot.</p>
               <div className="mt-6 inline-flex items-center gap-3 rounded-full bg-gradient-to-r from-[#22e3ff] to-[#8b5cff] px-6 py-3 font-bold text-[#030712] shadow-[0_10px_40px_-10px_#22e3ff] transition group-hover:gap-5">Host Code &amp; Chaos <span aria-hidden>→</span></div>
             </div>
           </a>

@@ -4,7 +4,7 @@ import type { Priv, Pub, PubLot } from './types';
 import { normPriv, normPub } from './types';
 import { ccConfigured, listen, P, placeBid, register, rejoin, setOnline, signIn, startServerClock, submitAnswer, useConnected } from './fb';
 import * as E from './engine';
-import { CodeBlock, Countdown, Partic, RoundChip, useLeft } from './ui';
+import { CodeBlock, Countdown, DiffChip, useLeft } from './ui';
 import { Btn, cx } from '../components/ui';
 
 interface Me { team: number; pin: string }
@@ -80,7 +80,7 @@ function Shell({ children, pub, me, priv, connected = true }: { children: React.
               <span className="grid h-11 min-w-11 place-items-center rounded-xl border border-info/60 bg-info/10 px-2 font-[family-name:var(--font-display)] text-xl font-bold text-info num">T{me.team}</span>
               <div className="min-w-0 leading-tight">
                 <div className="font-[family-name:var(--font-display)] text-lg font-bold num">{priv ? E.money(priv.purse) : '—'}<span className="ml-2 text-sm text-muted">{priv ? `${priv.points} pts` : ''}</span></div>
-                <div className="truncate text-xs text-muted">{pub ? (pub.stage === 'registration' ? 'Waiting to start' : pub.stage === 'final' ? 'Final results' : pub.practice ? 'Practice · dummy money' : `Round ${pub.round} · ${pub.roundName}`) : ''}</div>
+                <div className="truncate text-xs text-muted">{pub ? (pub.stage === 'registration' ? 'Waiting to start' : pub.stage === 'final' ? 'Final results' : pub.practice ? 'Practice · dummy money' : 'Live auction') : ''}</div>
               </div>
             </>
           ) : (
@@ -205,7 +205,7 @@ function Arena({ code, pub, me, priv }: { code: string; pub: Pub; me: Me; priv: 
     <div className="flex flex-col gap-4">
       {l && !['done', 'skipped'].includes(l.status) ? <LotPhone code={code} pub={pub} l={l} me={me} priv={priv} /> : (
         <div className="panel p-6 text-center">
-          <RoundChip round={pub.practice ? 0 : pub.round} />
+          <span className="label">{pub.practice ? 'Practice' : 'Live auction'}</span>
           <h2 className="mt-2 font-[family-name:var(--font-display)] text-2xl font-bold uppercase">Next lot coming up</h2>
           <p className="mt-1 text-muted">Watch the big screen.</p>
         </div>
@@ -220,11 +220,11 @@ function LotPhone({ code, pub, l, me, priv }: { code: string; pub: Pub; l: PubLo
   return (
     <div className="panel overflow-hidden">
       <div className="border-b border-line p-4">
-        <div className="flex items-center gap-2"><RoundChip round={l.round} />{l.kind !== 'vault' && l.kind !== 'practice' && <span className="ml-auto"><Partic p={l.participation} /></span>}</div>
+        <div className="flex items-center gap-2">{l.difficulty && <DiffChip d={l.difficulty} />}{l.practice && <span className="text-xs font-bold text-muted">PRACTICE · dummy money</span>}</div>
         <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl font-bold uppercase leading-tight">{l.label} · {l.kind === 'vault' ? `Mystery vault ${l.seq}` : l.title}</h2>
         <div className="mt-1 flex flex-wrap gap-x-3 text-sm text-muted">
           {l.kind !== 'jackpot' && l.kind !== 'crowd' && <span>Base <b className="text-gold">{E.money(l.base)}</b></span>}
-          <span>Reward <b className="text-fg">{l.kind === 'vault' && !l.vault ? '???' : l.reward === null ? 'hidden' : `${l.reward} pts`}</b></span>
+          <span>Reward <b className="text-fg">{l.reward === null ? 'hidden' : `${l.reward} pts`}</b></span>
         </div>
       </div>
       <div className="p-4">
@@ -239,7 +239,8 @@ function LotPhone({ code, pub, l, me, priv }: { code: string; pub: Pub; l: PubLo
           <div className="text-center">
             <div className={cx('font-[family-name:var(--font-display)] text-4xl font-bold', mine ? 'gold-text animate-stamp' : 'text-fg')}>{mine ? 'YOU WON IT! 🔨' : `SOLD to Team ${l.owner}`}</div>
             <p className="mt-1 text-muted">for {E.money(l.price ?? 0)}</p>
-            {mine && l.kind !== 'vault' && <p className="mt-2 text-sm">Get ready, the challenge is coming. You'll have 10 seconds.</p>}
+            {mine && l.kind !== 'vault' && <p className="mt-2 text-sm">Get ready: the question is coming, and only your team can answer it first. You'll have 10 seconds.</p>}
+            {!mine && <p className="mt-2 text-sm text-muted">If Team {l.owner} gets it wrong, the question opens to everyone. Stay ready!</p>}
           </div>
         )}
         {l.status === 'unsold' && <p className="text-center font-[family-name:var(--font-display)] text-3xl font-bold text-muted">UNSOLD</p>}
@@ -338,14 +339,14 @@ function AnswerPad({ code, pub, me }: { code: string; pub: Pub; me: Me }) {
       <div className="flex items-start gap-3">
         <Countdown deadline={q.deadline} total={pub.cfg.answerSec} size={84} />
         <div className="min-w-0">
-          {q.n === 2 && <div className="mb-1 inline-block rounded bg-live/20 px-2 py-0.5 text-xs font-bold text-live">STEAL WINDOW</div>}
+          {q.n === 2 && <div className="mb-1 inline-block rounded bg-live/20 px-2 py-0.5 text-xs font-bold text-live">OPEN TO EVERYONE · {q.reward} pts</div>}
           <p className="text-lg font-semibold leading-snug">{q.prompt}</p>
         </div>
       </div>
       <CodeBlock code={q.code} className="mt-3 text-sm" />
       {q.image && <img src={q.image} alt="" className="mt-3 max-h-48 rounded-xl" />}
       {!eligible ? (
-        <p className="mt-4 rounded-xl bg-panel-2 px-3 py-3 text-center text-muted">{q.elig === 'owner' ? `Only Team ${q.owner} answers this one. Watch the screen!` : 'You owned this one. Other teams are trying to steal it.'}</p>
+        <p className="mt-4 rounded-xl bg-panel-2 px-3 py-3 text-center text-muted">{q.elig === 'owner' ? `Team ${q.owner} is answering. If they get it wrong, it opens to everyone, so get ready!` : 'You missed it. The other teams are answering now.'}</p>
       ) : locked ? (
         <div className="mt-4 rounded-xl border border-ok/50 bg-ok/10 p-4 text-center">
           <div className="font-[family-name:var(--font-display)] text-2xl font-bold text-ok">ANSWER LOCKED 🔒</div>

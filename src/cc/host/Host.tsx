@@ -3,14 +3,14 @@ import * as E from '../engine';
 import type { HostState, Lot } from '../types';
 import { coKey, hostLink, joinLink, serverNow, useServerNow } from '../fb';
 import { HostProvider, useHost } from './store';
-import { clock, CodeBlock, Countdown, Partic, QR, RoundChip, TeamBadge } from '../ui';
+import { clock, CodeBlock, Countdown, DiffChip, QR, TeamBadge } from '../ui';
 import { Btn, confirmDialog, ConfirmHost, cx, Field, Label, Modal, toast, ToastHost } from '../../components/ui';
 import { copyText } from '../../lib/util';
 import { unlockAudio } from '../../lib/sound';
 import { BankTab, LotsTab, SettingsTab, TeamsTab } from './Tabs';
 
 type Tab = 'live' | 'teams' | 'lots' | 'bank' | 'settings';
-const TABS: [Tab, string][] = [['live', 'Live control'], ['teams', 'Teams'], ['lots', 'Lots'], ['bank', 'Questions'], ['settings', 'Settings & log']];
+const TABS: [Tab, string][] = [['live', 'Live control'], ['teams', 'Teams'], ['lots', 'Played'], ['bank', 'Questions'], ['settings', 'Settings & log']];
 
 export function HostApp({ code }: { code: string }) {
   return (
@@ -40,11 +40,6 @@ function HostShell() {
             <div className={cx('rounded-lg border px-3 py-1 text-sm num', sch.overDeadline ? 'border-live text-live' : 'border-line')} title="Event timer">
               ⏱ <b className="font-[family-name:var(--font-display)] text-base">{s.clockStart ? clock(now - s.clockStart) : '00:00'}</b><span className="text-dim"> / {total}:00</span>
             </div>
-            {s.clockStart && s.stage !== 'final' && (
-              <span className={cx('rounded-lg px-2.5 py-1 text-xs font-bold', sch.state === 'behind' ? 'bg-live/20 text-live' : sch.state === 'ahead' ? 'bg-ok/15 text-ok' : 'bg-info/10 text-info')}>
-                {sch.part}: {sch.state === 'on' ? 'on schedule' : `${Math.abs(sch.delta).toFixed(1)} min ${sch.state}`}
-              </span>
-            )}
             <span className="text-xs text-muted" title="Team phones online">📱 {online.size}</span>
             <a className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-semibold hover:border-info" href={`#cc/screen/${s.code}`} target="_blank" rel="noreferrer">Projector ↗</a>
             <AddDevice />
@@ -129,7 +124,7 @@ function Live() {
         {s.stage === 'final' && <FinalPanel />}
       </section>
       <aside className="flex min-w-0 flex-col gap-4">
-        <SchedulePanel />
+        <EventPanel />
         <BoardPanel />
         <QuickPanel />
       </aside>
@@ -175,71 +170,59 @@ function RegistrationPanel() {
   );
 }
 
-function lotOrder(a: Lot, b: Lot) {
-  const k = (l: Lot) => l.round * 100 + (l.kind === 'jackpot' ? 90 : l.kind === 'vault' ? 10 + l.seq : l.seq);
-  return k(a) - k(b);
-}
-export const upcoming = (s: HostState) => s.lots.filter((l) => l.status === 'pending' && l.practice === (s.stage === 'practice')).sort(lotOrder);
+const played = (s: HostState) => s.lots.filter((l) => !l.practice && l.status !== 'skipped').length;
 
 function NextLot() {
   const { s, act } = useHost();
-  const list = upcoming(s);
-  const next = list[0];
-  const now = useServerNow(1000);
-  const block = E.canStartLot(s, now);
-  if (s.stage === 'practice' && !next) {
-    return (
-      <div className="panel p-8 text-center">
-        <h2 className="font-[family-name:var(--font-display)] text-4xl font-bold uppercase">Practice done</h2>
-        <p className="mt-2 text-muted">Practice money and points are thrown away when the event starts.</p>
-        <Btn variant="primary" size="xl" className="mt-6" onClick={async () => { if (await confirmDialog('Start the actual event?', `Every registered team gets ${E.money(s.cfg.purse)} and 0 points.`, 'Start event', false)) act((x) => E.startLive(x, serverNow()), 'The event is live!'); }}>▶ Start actual event</Btn>
-      </div>
-    );
-  }
-  if (!next) {
-    return (
-      <div className="panel p-8 text-center">
-        <h2 className="font-[family-name:var(--font-display)] text-4xl font-bold uppercase">All lots played</h2>
-        <p className="mt-2 text-muted">Reveal the final results when you're ready.</p>
-        <Btn variant="gold" size="xl" className="mt-6" onClick={() => act((x) => E.finalize(x, serverNow()), 'Results are ready.')}>🏆 Go to final results</Btn>
-      </div>
-    );
-  }
-  const m = E.ROUND_META[next.round]!;
-  const roundStart = next.round > 0 && !s.lots.some((l) => l.round === next.round && !l.practice && l.status !== 'pending' && l.kind !== 'crowd');
+  const [diff, setDiff] = useState<'any' | 'Medium' | 'Hard'>('any');
+  const [qid, setQid] = useState('');
+  const mode = s.cfg.bidMode ?? 'physical';
+  const left = E.unusedQuestions(s, diff);
+  const practice = s.stage === 'practice';
+  const n = s.lots.filter((l) => l.practice === practice).reduce((m, l) => Math.max(m, l.seq), 0) + 1;
+  const go = () => { if (act((x) => E.nextQuestion(x, serverNow(), { qid: qid || undefined, difficulty: diff }))) setQid(''); };
   return (
     <div className="panel overflow-hidden">
-      <div className="border-b border-line p-5 sm:p-7" style={{ background: `linear-gradient(120deg, ${m.color}22, transparent 60%)` }}>
-        <RoundChip round={next.round} />
-        {roundStart && <p className="mt-1 text-sm text-muted">New round: {m.tag}</p>}
-        <Label className="mt-4">Up next</Label>
-        <h2 className="font-[family-name:var(--font-display)] text-[clamp(30px,4vw,54px)] font-bold uppercase leading-none">{E.lotLabel(next)} · {next.title}</h2>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-          {next.kind !== 'jackpot' && <span>Base <b className="text-gold">{E.money(next.base)}</b></span>}
-          {next.kind !== 'vault' && <span>Reward <b>{next.reward} pts</b>{next.round === 2 ? <span className="text-dim"> (hidden from teams)</span> : null}</span>}
-          {next.kind === 'question' && <Partic p={next.participation} />}
-          <span className="rounded-md border border-line px-2 py-0.5 text-xs uppercase">{next.mode === 'mobile' ? '📱 phone bidding' : next.mode === 'free' ? 'no bidding' : '✋ physical bidding'}</span>
+      <div className="border-b border-line p-5 sm:p-7" style={{ background: 'linear-gradient(120deg, #22e3ff22, transparent 60%)' }}>
+        <Label>{practice ? 'Practice (dummy money)' : `${played(s)} questions played`}</Label>
+        <h2 className="mt-1 font-[family-name:var(--font-display)] text-[clamp(30px,4vw,54px)] font-bold uppercase leading-none">{practice ? `Practice ${n}` : `Lot ${String(n).padStart(2, '0')}`}: next question</h2>
+        <p className="mt-2 text-sm text-muted">A random unused question goes up for auction. The winning team answers alone; if they get it wrong, it opens to every other team.</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <Field label="Difficulty">
+            <select id="next-diff" className="field" value={diff} onChange={(e) => { setDiff(e.target.value as typeof diff); setQid(''); }}>
+              <option value="any">Any (mix)</option><option value="Medium">Medium</option><option value="Hard">Hard</option>
+            </select>
+          </Field>
+          <Field label="Question">
+            <select id="next-q" className="field" value={qid} onChange={(e) => setQid(e.target.value)}>
+              <option value="">Random ({left.length} left)</option>
+              {left.map((q) => <option key={q.id} value={q.id}>{q.title} · {q.category} ({q.difficulty})</option>)}
+            </select>
+          </Field>
+          <Field label="Bidding">
+            <select id="next-mode" className="field" value={mode} onChange={(e) => act((x) => E.configure(x, { bidMode: e.target.value as 'physical' | 'mobile' }))}>
+              <option value="physical">✋ Out loud (you enter the winner)</option><option value="mobile">📱 On team phones</option>
+            </select>
+          </Field>
         </div>
-        {block && <p className="mt-3 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn">{block}</p>}
         <div className="mt-5 flex flex-wrap gap-2">
-          <Btn variant="primary" size="xl" disabled={!!block} onClick={() => act((x) => E.startLot(x, next.id, serverNow()))}>▶ {next.kind === 'jackpot' ? 'START JACKPOT (10 s)' : `START AUCTION (${s.cfg.auctionSec} s)`}</Btn>
-          {next.kind !== 'jackpot' && <Btn variant="ghost" size="xl" onClick={async () => { if (await confirmDialog(`Skip ${E.lotLabel(next)}?`, 'Use this to stay on time. You can bring it back from the Lots tab.', 'Skip lot')) act((x) => E.skipLot(x, next.id)); }}>Skip</Btn>}
+          <Btn variant="primary" size="xl" disabled={!left.length && !qid} onClick={go}>▶ NEXT QUESTION</Btn>
+          {practice
+            ? <Btn variant="gold" size="xl" onClick={async () => { if (await confirmDialog('Start the actual event?', `Every registered team gets ${E.money(s.cfg.purse)} and 0 points.`, 'Start event', false)) act((x) => E.startLive(x, serverNow()), 'The event is live!'); }}>▶ Start actual event</Btn>
+            : <FinishBtn />}
         </div>
-      </div>
-      <div className="p-5">
-        <Label className="mb-2">Then</Label>
-        <div className="flex flex-col gap-1">
-          {list.slice(1, 7).map((l) => (
-            <div key={l.id} className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-panel-2">
-              <span className="w-28 font-[family-name:var(--font-display)] font-bold" style={{ color: E.ROUND_META[l.round]!.color }}>{E.lotLabel(l)}</span>
-              <span className="min-w-0 flex-1 truncate">{l.title}</span>
-              <span className="text-muted num">{l.kind === 'jackpot' ? 'free' : E.money(l.base)}</span>
-              <Btn size="xs" variant="ghost" disabled={!!block} onClick={() => act((x) => E.startLot(x, l.id, serverNow()))}>Start now</Btn>
-            </div>
-          ))}
-        </div>
+        {!left.length && <p className="mt-3 text-sm text-warn">No unused {diff === 'any' ? '' : `${diff} `}questions left. Add or import more under Questions.</p>}
       </div>
     </div>
+  );
+}
+
+function FinishBtn({ size = 'xl' }: { size?: 'xl' | 'sm' }) {
+  const { s, act } = useHost();
+  return (
+    <Btn variant="ghost" size={size} className="border border-gold/50 text-gold" onClick={async () => {
+      if (await confirmDialog('Finish the auction?', `${played(s)} questions were played. Next you reveal the leaderboard: 3rd place, runner-up, then champions. You can come back with "Back to the auction" if needed.`, 'Finish auction', false)) act((x) => E.finalize(x, serverNow()), 'Auction finished. Reveal the results when ready.');
+    }}>🏁 Finish auction</Btn>
   );
 }
 
@@ -248,21 +231,19 @@ function LotHeader({ l }: { l: Lot }) {
   const { s } = useHost();
   const [show, setShow] = useState(false);
   const q = E.question(s, l.questionId);
-  const m = E.ROUND_META[l.round]!;
   return (
-    <div className="border-b border-line p-5" style={{ background: `linear-gradient(120deg, ${m.color}22, transparent 60%)` }}>
+    <div className="border-b border-line p-5" style={{ background: 'linear-gradient(120deg, #22e3ff22, transparent 60%)' }}>
       <div className="flex flex-wrap items-center gap-2">
-        <RoundChip round={l.round} />
+        <DiffChip d={l.difficulty} />
+        {l.mode === 'mobile' && <span className="rounded bg-info/15 px-2 py-0.5 text-xs font-bold text-info">📱 PHONE BIDDING</span>}
         {l.practice && <span className="rounded bg-panel-2 px-2 py-0.5 text-xs font-bold">PRACTICE: dummy money</span>}
       </div>
       <h2 className="mt-2 font-[family-name:var(--font-display)] text-[clamp(28px,3.6vw,50px)] font-bold uppercase leading-none">{E.lotLabel(l)} · {l.title}</h2>
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
         {l.category && <span>{l.category}</span>}
-        {l.kind !== 'vault' && <span>{l.difficulty}</span>}
-        {l.kind !== 'jackpot' && l.kind !== 'crowd' && <span>Base <b className="text-gold">{E.money(l.base)}</b></span>}
-        {l.kind !== 'vault' && <span>Reward <b className="text-fg">{l.reward} pts</b></span>}
-        {(l.kind === 'question' || l.kind === 'practice') && <Partic p={l.participation} />}
-        {(l.kind === 'crowd' || l.kind === 'jackpot') && <Partic p="all" />}
+        {l.kind !== 'crowd' && <span>Base <b className="text-gold">{E.money(l.base)}</b></span>}
+        <span>Reward <b className="text-fg">{l.reward} pts</b></span>
+        {l.kind !== 'crowd' && <span>If they miss: <b className="text-fg">{Math.floor(l.reward * s.cfg.stealShare)} pts</b> for every other team that's right</span>}
       </div>
       {q && (
         <div className="mt-3">
@@ -276,7 +257,6 @@ function LotHeader({ l }: { l: Lot }) {
           )}
         </div>
       )}
-      {l.kind === 'vault' && <p className="mt-2 text-xs text-dim">Contents are sealed. They're revealed only after the sale.</p>}
     </div>
   );
 }
@@ -293,7 +273,6 @@ function LotControl() {
         {l.status === 'sold' && <SoldCtl l={l} />}
         {l.status === 'unsold' && <UnsoldCtl l={l} />}
         {(l.status === 'answer' || l.status === 'steal') && <AnswerCtl l={l} />}
-        {l.status === 'vault' && <VaultCtl l={l} />}
         {l.status === 'results' && <ResultsCtl l={l} />}
       </div>
     </div>
@@ -398,10 +377,8 @@ function SoldCtl({ l }: { l: Lot }) {
       <div className="font-[family-name:var(--font-display)] text-5xl font-bold gold-text">SOLD! 🔨</div>
       <div className="mt-2 flex items-center justify-center gap-3 text-2xl"><TeamBadge no={l.owner} size="lg" /> for <b className="num">{E.money(l.price ?? 0)}</b></div>
       <p className="mt-1 text-sm text-muted">Team {l.owner} now has {E.money(E.purseOf(s, l.owner!, l.practice))} left.</p>
-      {l.kind === 'vault'
-        ? <Btn variant="primary" size="xl" className="mt-6" onClick={() => act((x) => E.openVault(x, serverNow()))}>🔓 OPEN THE VAULT</Btn>
-        : <Btn variant="primary" size="xl" className="mt-6" onClick={() => act((x) => E.revealChallenge(x, serverNow()))}>REVEAL CHALLENGE · {Math.min(10, s.cfg.answerSec)} s</Btn>}
-      {s.cfg.auto && l.kind !== 'vault' && <p className="mt-2 text-xs text-dim">Auto-reveal is on: the challenge starts by itself in a few seconds.</p>}
+      <Btn variant="primary" size="xl" className="mt-6" onClick={() => act((x) => E.revealChallenge(x, serverNow()))}>REVEAL QUESTION · {Math.min(10, s.cfg.answerSec)} s</Btn>
+      {s.cfg.auto && <p className="mt-2 text-xs text-dim">Auto-reveal is on: the challenge starts by itself in a few seconds.</p>}
     </div>
   );
 }
@@ -412,8 +389,8 @@ function UnsoldCtl({ l }: { l: Lot }) {
     <div className="text-center">
       <div className="font-[family-name:var(--font-display)] text-5xl font-bold text-muted">UNSOLD</div>
       <div className="mt-6 flex flex-wrap justify-center gap-2">
-        {l.kind !== 'vault' && l.questionId && <Btn variant="primary" size="xl" onClick={() => act((x) => E.unsoldToCrowd(x, serverNow()))}>Free crowd question ({Math.max(10, Math.floor(l.reward * s.cfg.share))} pts)</Btn>}
-        <Btn variant="subtle" size="xl" onClick={() => act((x) => E.finishLot(x))}>{l.kind === 'vault' ? 'Skip vault (stays sealed)' : 'Skip'}</Btn>
+        {l.questionId && <Btn variant="primary" size="xl" onClick={() => act((x) => E.unsoldToCrowd(x, serverNow()))}>Ask everyone ({Math.max(10, Math.floor(l.reward * s.cfg.stealShare))} pts each)</Btn>}
+        <Btn variant="subtle" size="xl" onClick={() => act((x) => E.nextQuestion(E.finishLot(x), serverNow()))}>Skip → next question</Btn>
       </div>
     </div>
   );
@@ -430,10 +407,10 @@ function AnswerCtl({ l }: { l: Lot }) {
   return (
     <div>
       <div className="grid gap-5 md:grid-cols-[auto_1fr]">
-        <Countdown deadline={w.deadline} total={Math.min(10, s.cfg.answerSec)} size={170} label={w.n === 2 ? 'STEAL' : 'ANSWER'} />
+        <Countdown deadline={w.deadline} total={Math.min(10, s.cfg.answerSec)} size={170} label={w.n === 2 ? 'EVERYONE' : 'ANSWER'} />
         <div className="min-w-0">
           <div className={cx('inline-block rounded-lg px-3 py-1 text-sm font-bold', w.n === 2 ? 'bg-live/20 text-live' : 'bg-info/15 text-info')}>
-            {w.n === 2 ? `STEAL WINDOW: everyone except Team ${w.owner} · ${w.reward} pts to the first correct answer` : w.elig === 'owner' ? `Only Team ${w.owner} answers · ${w.reward} pts` : `All teams answer · ${w.reward} pts${w.owner ? ` to Team ${w.owner}, ${Math.floor(w.reward * s.cfg.share)} to others` : ' each'}`}
+            {w.n === 2 ? `Team ${w.owner} missed it. OPEN TO EVERYONE · ${w.reward} pts for each correct team` : w.elig === 'owner' ? `Only Team ${w.owner} answers · ${w.reward} pts` : `All teams answer · ${w.reward} pts each`}
           </div>
           <p className="mt-3 text-xl font-semibold">{q.prompt}</p>
           <CodeBlock code={q.code} className="mt-2" />
@@ -463,34 +440,6 @@ function VoidModal({ open, onClose, reason, setReason, onGo }: { open: boolean; 
   );
 }
 
-function crowdPick(s: HostState) {
-  const used = new Set(s.lots.filter((l) => l.questionId && l.status !== 'skipped').map((l) => l.questionId));
-  const pool = s.bank.filter((q) => q.active && !used.has(q.id));
-  return pool[Math.floor(Math.random() * pool.length)];
-}
-
-function VaultCtl({ l }: { l: Lot }) {
-  const { s, act } = useHost();
-  const v = l.vault!;
-  return (
-    <div className="text-center">
-      <Label>Vault {l.seq} contained</Label>
-      <div className="mt-1 font-[family-name:var(--font-display)] text-5xl font-bold uppercase text-magenta" style={{ color: '#ff4fd8' }}>{v.title}</div>
-      <p className="mt-1 text-lg">{v.text}</p>
-      <p className="text-sm text-muted">Team {l.owner}{v.kind === 'points' ? ` +${v.value} points` : v.kind === 'cash' ? ` +${E.money(v.value)}` : ''}</p>
-      <div className="mt-6 flex flex-wrap justify-center gap-2">
-        {v.kind === 'double'
-          ? <Btn variant="primary" size="xl" onClick={() => act((x) => E.startVaultChallenge(x, serverNow()))}>START VAULT CHALLENGE · 10 s</Btn>
-          : <>
-            <Btn variant="primary" size="xl" onClick={() => { const q = crowdPick(s); if (!q) return toast('No unused questions left in the bank.', 'warn'); act((x) => E.crowdQuestion(x, q.id, serverNow())); }}>Free crowd question ({s.cfg.crowdReward} pts)</Btn>
-            <Btn variant="subtle" size="xl" onClick={() => act((x) => E.finishLot(x))}>Next ▶</Btn>
-          </>}
-      </div>
-      {v.kind !== 'double' && <p className="mt-2 text-xs text-dim">A quick free question keeps the other teams involved during the mystery round.</p>}
-    </div>
-  );
-}
-
 function ResultsCtl({ l }: { l: Lot }) {
   const { s, act } = useHost();
   const r = l.result!;
@@ -504,19 +453,20 @@ function ResultsCtl({ l }: { l: Lot }) {
           <Label>Correct answer</Label>
           <div className="font-[family-name:var(--font-display)] text-4xl font-bold text-ok">{r.answer}</div>
           {r.explain && <p className="mt-1 text-muted">{r.explain}</p>}
-          {r.ownerCorrect !== null && <p className="mt-2">Team {l.owner}: <b className={r.ownerCorrect ? 'text-ok' : 'text-live'}>{r.ownerCorrect ? 'correct' : 'wrong or no answer'}</b>{r.stealTried ? ' · steal window was opened' : ''}</p>}
+          {r.ownerCorrect !== null && <p className="mt-2">Team {l.owner}: <b className={r.ownerCorrect ? 'text-ok' : 'text-live'}>{r.ownerCorrect ? 'correct' : 'wrong or no answer'}</b>{r.stealTried ? ' · then opened to everyone' : ''}</p>}
           <p className="mt-1 text-sm text-dim">{r.submitted} answers · {r.correct} correct</p>
         </div>
         <div>
           <Label>Points awarded ({total})</Label>
           <div className="mt-1 flex max-h-56 flex-wrap gap-1.5 overflow-auto">
             {r.scores.length === 0 && <span className="text-muted">Nobody scored.</span>}
-            {r.scores.map((x) => <span key={x.team + x.role} className="rounded-lg border border-ok/40 bg-ok/10 px-2 py-1 text-sm"><b>T{x.team}</b> +{x.pts}{x.role === 'steal' ? ' (steal)' : x.role === 'owner' ? ' (owner)' : ''}</span>)}
+            {r.scores.map((x) => <span key={x.team + x.role} className="rounded-lg border border-ok/40 bg-ok/10 px-2 py-1 text-sm"><b>T{x.team}</b> +{x.pts}{x.role === 'owner' ? ' (winner)' : ''}</span>)}
           </div>
         </div>
       </div>
       <div className="mt-6 flex flex-wrap gap-2">
-        <Btn variant="primary" size="xl" className="flex-1" onClick={() => act((x) => E.finishLot(x))}>NEXT LOT ▶</Btn>
+        <Btn variant="primary" size="xl" className="flex-1" onClick={() => act((x) => E.nextQuestion(E.finishLot(x), serverNow()))}>NEXT QUESTION ▶</Btn>
+        <Btn variant="subtle" size="xl" onClick={() => act((x) => E.finishLot(x))}>Show leaderboard</Btn>
         <Btn variant="ghost" onClick={() => setVoidOpen(true)}>Void &amp; replay</Btn>
       </div>
       <VoidModal open={voidOpen} onClose={() => setVoidOpen(false)} reason={reason} setReason={setReason} onGo={() => { if (act((x) => E.voidAndReplay(x, reason, serverNow()), 'Question replayed.')) { setVoidOpen(false); setReason(''); } }} />
@@ -553,37 +503,23 @@ function FinalPanel() {
   );
 }
 
-function SchedulePanel() {
-  const { s, act } = useHost();
+function EventPanel() {
+  const { s } = useHost();
   const now = useServerNow(1000);
-  const sch = E.scheduleStatus(s, now);
-  const names = ['Registration', 'Rules & practice', 'Round 1', 'Round 2', 'Round 3', 'Round 4', 'Results'];
-  let acc = 0;
+  const total = E.EVENT_MINUTES(s.cfg);
+  const mins = s.clockStart ? (now - s.clockStart) / 60000 : 0;
   return (
     <div className="panel p-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-[family-name:var(--font-display)] text-xl font-bold uppercase">Schedule</h3>
-        <span className="text-sm num">{s.clockStart ? clock(now - s.clockStart) : '—'} / {E.EVENT_MINUTES(s.cfg)}:00</span>
+        <h3 className="font-[family-name:var(--font-display)] text-xl font-bold uppercase">Event</h3>
+        <span className={cx('text-sm num', mins > total && 'text-live')}>⏱ {s.clockStart ? clock(now - s.clockStart) : '—'} / {total}:00</span>
       </div>
-      <div className="mt-2 flex flex-col gap-1 text-sm">
-        {s.cfg.schedule.map((m, i) => {
-          const from = acc; acc += m;
-          const active = names[i] === sch.part && !!s.clockStart;
-          return <div key={i} className={cx('flex justify-between rounded px-2 py-0.5', active && 'bg-info/15 text-info font-semibold')}><span>{names[i]}</span><span className="num text-muted">{String(from).padStart(2, '0')}:00–{String(acc).padStart(2, '0')}:00</span></div>;
-        })}
+      <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+        <div className="rounded-lg bg-ink/50 p-2"><div className="label">Played</div><b className="text-xl num">{played(s)}</b></div>
+        <div className="rounded-lg bg-ink/50 p-2"><div className="label">Questions left</div><b className="text-xl num">{E.unusedQuestions(s).length}</b></div>
       </div>
-      {sch.overDeadline && s.stage === 'live' && (
-        <div className="mt-3 rounded-lg border border-live/40 bg-live/10 p-2 text-sm text-live">
-          60 minutes are up. Finish the current lot, then go to the final results.
-          <div className="mt-2 flex gap-2">
-            <Btn size="sm" variant="gold" onClick={() => act((x) => E.finalize(x, serverNow()))}>🏆 Final results</Btn>
-            <Btn size="sm" variant="ghost" onClick={() => act((x) => E.setOvertime(x, !x.overtime))}>{s.overtime ? 'Stop overtime' : 'Allow overtime'}</Btn>
-          </div>
-        </div>
-      )}
-      {s.stage === 'live' && !sch.overDeadline && !E.curLot(s) && (
-        <Btn size="sm" variant="ghost" className="mt-2" onClick={async () => { if (await confirmDialog('End the auction now?', 'Unplayed lots stay unplayed. You can come back with "Back to the auction".', 'Final results', false)) act((x) => E.finalize(x, serverNow())); }}>End early → final results</Btn>
-      )}
+      {s.stage === 'live' && !E.curLot(s) && <div className="mt-3"><FinishBtn size="sm" /></div>}
+      {s.stage === 'live' && mins > total && <p className="mt-2 text-xs text-live">Planned time is up. Press Finish auction when you're ready.</p>}
     </div>
   );
 }
@@ -620,14 +556,11 @@ function QuickPanel() {
   const [pts, setPts] = useState('');
   const [cash, setCash] = useState('');
   const [reason, setReason] = useState('');
-  const l = E.curLot(s);
-  const canCrowd = (s.stage === 'live' || s.stage === 'practice') && (!l || ['done', 'skipped', 'vault', 'unsold'].includes(l.status));
   useEffect(() => { if (!open) { setTeam(''); setPts(''); setCash(''); setReason(''); } }, [open]);
   return (
     <div className="panel p-4">
       <h3 className="font-[family-name:var(--font-display)] text-xl font-bold uppercase">Quick actions</h3>
       <div className="mt-2 flex flex-wrap gap-2">
-        <Btn size="sm" variant="outline" disabled={!canCrowd} onClick={() => { const q = crowdPick(s); if (!q) return toast('No unused questions left.', 'warn'); act((x) => E.crowdQuestion(x, q.id, serverNow())); }}>Free crowd question</Btn>
         <Btn size="sm" variant="outline" disabled={s.stage === 'registration'} onClick={() => setOpen(true)}>± Points / cash</Btn>
       </div>
       <Modal open={open} onClose={() => setOpen(false)} title="Manual adjustment">

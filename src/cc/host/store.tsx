@@ -166,7 +166,8 @@ export function HostProvider({ code, children }: { code: string; children: React
       if (typeof raw !== 'string') return;
       const st = JSON.parse(raw) as HostState;
       mirrorRef.current = st;
-      if (!pending.current.size || st.rev >= (ref.current?.rev ?? 0)) { ref.current = st; setS(st); }
+      const mine = ref.current?.rev ?? 0;
+      if (st.rev >= mine || (!pending.current.size && mine - st.rev > 3)) { ref.current = st; setS(st); }
     }, () => { if (alive) setLink('moved'); }).then((u) => (alive ? (offM = u) : u()));
     void signIn().then((uid) => listen<Record<string, boolean>>(P(code, `propAck/${uid}`), (acks) => {
       for (const [id, ok] of Object.entries(acks ?? {})) {
@@ -175,9 +176,12 @@ export function HostProvider({ code, children }: { code: string; children: React
         pending.current.delete(id);
         if (ok) { if (p.ok) toast(p.ok, 'ok'); continue; }
         // The game changed at the same moment (e.g. a timer ran out): redo the change on the newest copy.
-        if (mirrorRef.current) { ref.current = mirrorRef.current; setS(mirrorRef.current); }
-        if (p.tries >= 3) { toast('That change clashed with another one. Check the screen and try again.', 'warn'); continue; }
-        try { send(p.f, p.ok, p.tries + 1); } catch (e) { if (e instanceof E.GameError) toast(e.message, 'warn'); }
+        if (p.tries >= 3) { if (mirrorRef.current) { ref.current = mirrorRef.current; setS(mirrorRef.current); } toast('That change clashed with another one. Check the screen and try again.', 'warn'); continue; }
+        setTimeout(() => {
+          if (!alive) return;
+          if (mirrorRef.current) { ref.current = mirrorRef.current; setS(mirrorRef.current); }
+          try { send(p.f, p.ok, p.tries + 1); } catch (e) { if (e instanceof E.GameError) toast(e.message, 'warn'); }
+        }, 300 + 300 * p.tries);
       }
     }).then((u) => (alive ? (offA = u) : u())));
     return () => { alive = false; offM(); offA(); };
@@ -196,7 +200,7 @@ export function HostProvider({ code, children }: { code: string; children: React
           const cur = ref.current!;
           let ok = false;
           if (pr.base === cur.rev) {
-            try { const next = JSON.parse(pr.state) as HostState; if (next.code === cur.code && next.v === 1) { commit({ ...next, rev: cur.rev + 1 }); ok = true; } } catch { /* bad proposal */ }
+            try { const next = JSON.parse(pr.state) as HostState; if (next.code === cur.code && next.v === 1 && next.rev > cur.rev) { commit(next); ok = true; } } catch { /* bad proposal */ }
           }
           void ackProposal(code, uid, id, ok).catch(() => {});
         }
@@ -345,13 +349,13 @@ export function HostProvider({ code, children }: { code: string; children: React
 
 /** Create a new event: claim a fresh code, build the state from the bank, save locally and to Firebase. */
 export async function createEvent(name: string, date: string, teams: number) {
-  const { DEFAULT_BANK, DEFAULT_PLAN } = await import('../bank');
+  const { DEFAULT_BANK } = await import('../bank');
   const { newCode } = await import('../fb');
   await signIn();
   for (let i = 0; i < 5; i++) {
     const code = newCode();
     if (!(await claim(code))) continue;
-    const s = E.newEvent(code, structuredClone(DEFAULT_BANK), DEFAULT_PLAN as unknown as E.Plan, {
+    const s = E.newEvent(code, structuredClone(DEFAULT_BANK), {
       name: name.trim() || E.DEFAULT_CONFIG.name, date,
       teamNos: Array.from({ length: teams }, (_, k) => k + 1),
     });

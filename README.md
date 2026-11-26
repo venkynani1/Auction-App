@@ -3,7 +3,7 @@
 Two games in one app. Opening the link shows a game picker:
 
 1. **BID WARS Classic**: the original office auction (actors, cricketers, singers, mystery round) with console, projector and team rooms. Unchanged; its links (`#console`, `#projector`, `#join/…`) still work.
-2. **Code & Chaos**: a 60-minute tech and entertainment auction. Teams of four, one phone per team, 10-second answer windows, phone bidding and mystery vaults. See [Code & Chaos](#code--chaos) below.
+2. **Code & Chaos**: a tech and entertainment question auction. Teams of four, one phone per team, 10-second answers, bidding out loud or on phones. See [Code & Chaos](#code--chaos) below.
 
 React + TypeScript + Tailwind CSS, built with Vite. Classic saves everything in the browser. Team rooms and Code & Chaos use Firebase Realtime Database (free tier).
 
@@ -118,19 +118,21 @@ Needs the Firebase setup above (same project, same environment variables). **Pas
    Duplicate team numbers are refused. A team that changes phones signs in with its PIN; the old phone is signed out.
    **Teams → Reset PIN** if a team forgets it.
 3. **Start practice auction** (optional, dummy money, thrown away), then **Start actual event**: every team gets ₹10 Cr and 0 points.
-4. Each lot: **START AUCTION** → teams bid (out loud, or on phones for phone-bidding lots) → **CONFIRM SALE** (team number + price, checked against the purse) → **REVEAL CHALLENGE** → 10-second answer window → automatic scoring → **NEXT LOT**.
-5. When the lots are done (or time is up), go to **Final results** and reveal 3rd place, runner-up and champions one at a time.
+4. One continuous auction. Press **NEXT QUESTION**: a random unused question (or one you pick, or only Medium / Hard) goes up for auction.
+   Teams bid (out loud, or on their phones) → **CONFIRM SALE** (team number + price, checked against the purse) → **REVEAL QUESTION**.
+5. Only the winning team answers (10 seconds). **Right**: they get the reward. **Wrong**: the question automatically opens to every
+   other team for 10 seconds, and every team that answers correctly gets 50% of the reward (Settings).
+   Unsold questions can be asked to everyone, or skipped.
+6. Keep going as long as you like. **🏁 Finish auction** ends it; then reveal 3rd place, runner-up and champions one at a time.
 
 **Rules built in**
 
-- Round 1 *The Smart Market*: physical bidding, reward shown. Round 2 *Crack the Code*: reward hidden until sold. Round 3 *The Open Market*: bidding on phones. Round 4 *Mystery Takeover*: 4 sealed vaults (+300 pts, +₹2 Cr, a 500-point double challenge, a trap) plus a free-for-all jackpot.
-- OPEN: everyone answers, the owner gets full points, other correct teams 20%. EXCLUSIVE: only the owner answers. STEAL: if the owner misses, a second 10-second window opens for everyone else (50%). Unsold lots can become a free crowd question.
+- Medium questions: base ₹50 L, 100 points. Hard: base ₹80 L, 200 points (Settings).
+- Final points = points + 50 per full ₹1 Cr left (Settings).
+- 136 built-in medium and hard questions (coding, tech & AI, cloud/SQL/testing, logic, movies, sports, emoji). Add, edit, archive, import/export JSON or CSV under **Questions**. The **Played** tab lists every question so far.
 - Answer windows are timed by the Firebase server: answers after the deadline are refused, and each team can answer once.
-- Final points = points + 50 per full ₹1 Cr left (settings).
-- 7 lots per round by default (about 1½ minutes each). **Lots → ＋ Add lot / Remove** changes the count; **Skip** on the night if you fall behind.
-- Everything is changeable under **Lots** (question, base price, reward, OPEN/EXCLUSIVE/STEAL, physical/phone bidding, order, skip), **Questions** (120 built-in questions; add, edit, archive, import/export JSON or CSV) and **Settings**.
 - **Void & replay** for technical problems, **± Points / cash** for manual fixes. Every change is in the **audit log**; **Export results (CSV)** at the end.
-- The game saves itself after every action (this browser + Firebase). Reloading the host page or opening it on the same laptop continues where you left off.
+- The game saves itself after every action (this browser + Firebase).
 
 **Keep the answers secret**: phones and the projector only get a question when it is revealed, and its answer only after the window closes. The 120 built-in questions are also in this public GitHub repo, so if teams might look, edit them or import your own under **Questions**.
 
